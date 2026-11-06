@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.forge/
+*.log
+.env
+.env.*
+notes/private/
+scripts/.token

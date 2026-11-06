@@ -1,0 +1,61 @@
+# WikiVerify — Forge manifest
+# First deploy: `forge register` fills app.id; then `forge lint` and fix anything it flags.
+# No `external` permissions on purpose: that is what makes the app eligible for the "Runs on Atlassian" badge.
+
+modules:
+  scheduledTrigger:
+    - key: nightly-scan
+      function: nightly
+      interval: day
+
+  consumer:
+    - key: scan-batch-consumer
+      queue: scan-batch
+      resolver:
+        function: scan-batch
+        method: scan
+
+  function:
+    - key: nightly
+      handler: index.nightly
+      timeoutSeconds: 300
+    - key: scan-batch
+      handler: index.scanBatch
+      timeoutSeconds: 600
+    - key: resolver
+      handler: index.resolver
+
+  confluence:globalPage:
+    - key: wikiverify-dashboard
+      resource: dashboard
+      resolver:
+        function: resolver
+      render: native
+      title: WikiVerify
+
+  sql:
+    - key: main
+      engine: mysql
+
+  llm:
+    - key: claude
+      model:
+        - claude
+
+resources:
+  - key: dashboard
+    path: src/ui/dashboard/index.tsx
+
+permissions:
+  scopes:
+    - read:page:confluence
+    - read:space:confluence
+    - read:user:confluence
+    - read:jira-work
+    - read:jira-user
+    - storage:app
+
+app:
+  runtime:
+    name: nodejs22.x
+  id: ari:cloud:ecosystem::app/REPLACE-WITH-FORGE-REGISTER

@@ -1,0 +1,23 @@
+# Deploys to the Forge development environment on every merge to main.
+# Requires repository secrets FORGE_EMAIL and FORGE_API_TOKEN (Atlassian API token of the owner).
+# Production deploys stay manual (`npm run deploy:prod`) until the paid tier exists.
+name: deploy-dev
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.FORGE_DEPLOY_ENABLED == 'true' }}
+    env:
+      FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+      FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx forge lint
+      - run: npx forge deploy -e development --non-interactive
