@@ -10,8 +10,8 @@ Owner: Bibarys · Started: 2026-11-06 · Status: approved, pre-build
 
 A Forge app for Confluence Cloud that runs nightly, cross-checks wiki pages against Jira and the rest of the wiki, and produces a ranked list of pages that are wrong — each with the reason and a proposed fix the page owner approves in one click.
 
-**v0 (free, the test):** read-only scanner. One space per run. Output: top 20 problem pages with reasons. No fix action.
-**v1 (paid):** "Propose fix" + Jira cross-check + multi-space + Slack/email digest.
+**v0 (free, the test):** read-only scanner. One space per run. Output: top 20 problem pages with reasons **and the suggested fix text** (read-only preview). No apply action.
+**v1 (paid):** one-click *apply* of suggested fixes + rename propagation + multi-space + digest.
 
 **Why it works on this platform:** 0% revenue share to $1M lifetime, Atlassian hosts the code (Forge), Claude runs inside Atlassian's cloud (Forge LLMs API, GA July 2026) so the app qualifies for the "Runs on Atlassian" badge with no security review on the customer side.
 
@@ -40,7 +40,8 @@ Ordered by signal-to-noise. v0 ships checks 1–6; v1 adds 7–9.
 | 5 | Stale by type | runbooks/onboarding/how-to older than N days (threshold per label, admin-configurable); page type inferred once by LLM, cached | Haiku, once per page |
 | 6 | Self-contradiction within a space | two pages state different values for the same fact (owner, URL, port, SLA, step order) | Haiku extract → Sonnet adjudicate |
 | 7 | Code/infra drift (v1) | service names, env vars, endpoints on the page vs repo manifests — requires egress (GitHub) or Bitbucket Cloud API; may cost the badge; decide at v1 | Haiku |
-| 8 | Proposed fix (v1) | diff suggestion for 3, 4, 6; owner approves in page byline | Sonnet |
+| 8 | Suggested fix (v0 preview, v1 apply) | fix text for 3, 4, 6 shown in the free tier; one-click apply is paid | Sonnet |
+| 10 | Rename propagation (v1) | Jira component / version / project renamed → every page still using the old name | no |
 | 9 | "Questions the wiki can't answer" (v1) | if Confluence/Rovo search analytics exposed via API, list top failed queries → missing pages | no |
 
 Output per finding: `page, check, severity (high/med/low), evidence (quote + link), suggested action`.
@@ -151,3 +152,6 @@ Dev loop: `forge tunnel` against a free dev site; Claude Code with Forge MCP for
 | 2026-11-06 | Forge LLMs only, no external models | keeps Runs on Atlassian badge = the trust signal; cost is low enough |
 | 2026-11-06 | Free read-only scanner first | listing is the only distribution for an invisible founder; installs and reviews before monetization |
 | 2026-11-06 | No external link checking in v0 | any egress forfeits the badge |
+| 2026-11-12 | Suggested-fix text shown in the free tier; one-click apply is the paid feature | admins literally ask for "suggest specific updates"; the preview is the demo (notes/phrases.md) |
+| 2026-11-12 | Add rename-propagation check (Jira component/version renamed → pages still using the old name) | direct buyer quote; no competitor ships it |
+| 2026-11-12 | Positioning: "finds wrong pages and shows why", never "health score" | five score/freshness apps launched in 2026 with 1–143 installs each |

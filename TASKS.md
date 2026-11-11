@@ -37,10 +37,11 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 - [ ] T22 `forge eligibility` reports Runs on Atlassian; data residency declared; no egress. needs: T19.
 - [ ] T23 [owner] Submit free listing.
 
-- [ ] T19a Rename propagation check: Jira component/version renamed (or service name changed in a page marked canonical) → list pages still using the old name. Source: `notes/phrases.md`. needs: T11.
+- [ ] T19a Rename propagation check (approved 2026-11-12): Jira component/version renamed → list pages still using the old name. Uses Jira changelog of component/version names (last 180 days) + text search across scanned pages. needs: T11.
+- [ ] T19b Suggested-fix preview in free tier (approved 2026-11-12): Sonnet drafts the fix text for findings of checks 3, 4, 6 (`suggestion` field becomes concrete: old → new). Read-only; apply stays in T25. needs: T16.
 
 ## Later (not before week 5)
 
 - [ ] T24 Slack/email digest of new findings (Forge-native only; no egress — use Confluence notifications or Jira issue creation).
-- [ ] T25 Paid tier: `appIsLicensed` gating, "propose fix" (Sonnet diff → one-click apply via `write:page:confluence`).
+- [ ] T25 Paid tier: `appIsLicensed` gating, one-click *apply* of the suggested fix via `write:page:confluence` (adds scope → major version).
 - [ ] T26 Multi-space scheduling with per-space budgets.
