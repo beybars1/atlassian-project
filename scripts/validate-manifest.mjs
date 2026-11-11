@@ -1,0 +1,12 @@
+import { readFileSync } from "node:fs";
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
+import YAML from "yaml";
+const schema = JSON.parse(readFileSync("node_modules/@forge/manifest/out/schema/manifest-schema.json","utf8"));
+const manifest = YAML.parse(readFileSync("manifest.yml","utf8"));
+const ajv = new Ajv({ allErrors: true, strict: false });
+addFormats(ajv);
+const validate = ajv.compile(schema);
+const ok = validate(manifest);
+console.log(ok ? "MANIFEST OK" : "MANIFEST ERRORS");
+if (!ok) for (const e of validate.errors) console.log(`- ${e.instancePath || "/"} ${e.message} ${JSON.stringify(e.params)}`);

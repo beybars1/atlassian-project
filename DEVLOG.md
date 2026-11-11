@@ -4,6 +4,33 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-11 (Tue) — T08 done, T14 done, manifest validated, T16 started
+
+**Done**
+- Manifest validated against the official Forge JSON schema (`@forge/manifest`), caught a real error: `confluence:globalPage` requires `route`. Added `scripts/validate-manifest.mjs` + `npm run validate:manifest` — runs without a Forge login, so CI can use it.
+- `@forge/sql` and `@forge/llm` APIs confirmed from installed type definitions: SQL repo as written is correct; LLM is OpenAI-shaped chat with `tools` + `tool_choice`, usage in `input_tokens/output_tokens`.
+- T14: `src/llm/client.ts` — tool-forcing wrapper, model resolution via `list()`, cost estimate.
+- T16 step 1: `src/llm/extractFacts.ts` — fact extraction tool schema + conservative prompt, normalization, cross-page conflict detection. 6 new tests; 17 total green.
+- T08: `notes/phrases.md` — 15 verbatim buyer phrases, competitive map of 7 apps.
+
+**Learned**
+- The "freshness / health score" niche is crowded with 2026 launches that have 1–143 installs (FreshPage 2, Content Score 3, Evergreen 1, Content Health 1, Pulse 143). Incumbent with traction: Better Content Archiving (1,083 installs, 4.8★/156). Nobody does Jira cross-check, contradictions with evidence, rename propagation or suggested fixes. Positioning must be "finds wrong pages, shows why" — never "score".
+- `forge lint` cannot run without a logged-in CLI (keychain → `FORGE_EMAIL`/`FORGE_API_TOKEN` env works but needs a real account). Owner task T04 unblocks it.
+- `gh repo create` is blocked in this environment by policy; the owner creates the repo, the agent pushes.
+- Marketplace review pages are client-rendered and `/rest/2` is robots-blocked; written reviews need a browser session.
+
+**Proposed to owner (needs a yes before the agent acts)**
+1. Show the suggested fix text in the free tier; charge for one-click apply.
+2. Add rename-propagation check (T19a added to backlog, unscheduled).
+
+**Next**
+- Owner: create GitHub repo `atlassian-project` (private), T02 partner account + payouts, T03 contract, T04 dev site + `forge register` + secrets.
+- Agent (unblocked): T10 rate-limit handling, T11 components/versions drift, T16 remaining steps with fake LLM, T15 page-type classification.
+
+**Hours:** ~2.5
+
+---
+
 ## 2026-11-07 (Sat) — T01 scaffold
 
 **Done**

@@ -27,11 +27,12 @@ modules:
 
   confluence:globalPage:
     - key: wikiverify-dashboard
+      title: WikiVerify
+      route: wikiverify
       resource: dashboard
       resolver:
         function: resolver
       render: native
-      title: WikiVerify
 
   sql:
     - key: main
