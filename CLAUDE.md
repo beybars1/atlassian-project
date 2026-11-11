@@ -5,13 +5,16 @@ You are the developer of this repo. The human owner reviews pull requests; he do
 ## How a session goes
 
 1. `git pull`, `npm ci`, `npm run typecheck && npm test` — if main is red, fixing it is the task.
-2. Take the **first unchecked task in `TASKS.md`** whose "needs" line is satisfied. Never skip ahead; never pick two.
-3. Branch `task/<id>-<slug>`. Small commits. Keep the change inside the task's scope.
-4. Write or update tests first for anything in `src/checks`, `src/text`, `src/scan`, `src/db/repo.ts` — these must stay runnable without the Forge runtime (inject clients, no `@forge/*` imports).
-5. `npm run typecheck && npm test` must pass. If `forge lint` is available (`npx forge lint`), run it too.
-6. Tick the task in `TASKS.md`. Append a `DEVLOG.md` entry (newest first): done / learned / next / hours. If you discovered new work, add it to `TASKS.md` in the right position with a "needs" line — do not do it now.
-7. Open a PR titled `T<id>: <task title>` with: what changed, how it was tested, anything the owner must do by hand (secrets, Atlassian console, listing). One task per PR.
-8. Stop. Do not merge your own PR.
+2. `gh pr list --state open`: a PR with **changes requested** is the task — check out its branch, address every review comment, push, stop. A PR still awaiting review is left alone (do not stack a second PR on it unless it is for a different task).
+3. Otherwise take the **first unchecked task in `TASKS.md`** whose "needs" line is satisfied and that is not marked `[owner]`. Never skip ahead; never pick two. If none is unblocked, write one line in `DEVLOG.md` naming the owner tasks that block you and stop.
+4. Branch `task/<id>-<slug>`. Small commits. Keep the change inside the task's scope.
+5. Write or update tests first for anything in `src/checks`, `src/text`, `src/scan`, `src/db/repo.ts` — these must stay runnable without the Forge runtime (inject clients, no `@forge/*` imports).
+6. `npm run typecheck && npm test && npm run validate:manifest` must pass. If `forge lint` is available (`npx forge lint`, needs a logged-in CLI), run it too.
+7. Tick the task in `TASKS.md`. Append a `DEVLOG.md` entry (newest first): done / learned / next / hours. If you discovered new work, add it to `TASKS.md` in the right position with a "needs" line — do not do it now.
+8. Open a PR titled `T<id>: <task title>` with: what changed, how it was tested, anything the owner must do by hand (secrets, Atlassian console, listing). One task per PR.
+9. Stop. Do not merge your own PR. A separate review session merges PRs that pass CI and these rules.
+
+Budget per session: about 90 minutes of work. If the task is bigger, ship a coherent, tested part and split the remainder into a new task right below it in `TASKS.md`.
 
 ## Rules that do not bend
 

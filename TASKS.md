@@ -16,9 +16,9 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 ## Week 2 — scanner core (17–23 Nov)
 
 - [ ] T09 Incremental scan proven: second nightly run scans only changed pages (assert via `scan_runs`). needs: T07.
-- [ ] T10 Rate-limit handling: back off on 429 from Confluence/Jira, respect `Retry-After`, cap concurrency per batch. needs: T06.
-- [ ] T11 Jira ref drift: components and versions (archived/released/deleted) mentioned by name. Planted faults + tests. needs: T09.
-- [ ] T12 Dead-link check for Confluence attachments and anchors within the same page. needs: T09.
+- [ ] T10 Rate-limit handling: back off on 429 from Confluence/Jira, respect `Retry-After`, cap concurrency per batch. Code-only with a fake fetch in tests; live verification is part of T13. needs: T01.
+- [ ] T11 Jira ref drift: components and versions (archived/released/deleted) mentioned by name. Planted faults + tests. needs: T01.
+- [ ] T12 Dead-link check for Confluence attachments and anchors within the same page. needs: T01.
 - [ ] T13 Measured precision on the seeded space ≥ 90% for checks 1–4; false positives fixed or the pattern removed. needs: T09.
 
 ## Week 3 — LLM checks + UI (24–30 Nov)
