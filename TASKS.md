@@ -6,7 +6,6 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 
 - [x] T01 Scaffold repo: manifest, checks 1–4, orchestration, Forge clients, SQL repo, dashboard, tests, CI. *(done 2026-11-07 in chat)*
 - [ ] T02 [owner] Create Atlassian developer account + Marketplace partner account; ask partner support whether payouts to a Kazakhstan-registered entity are supported. Record the answer in DEVLOG.
-- [ ] T03 [owner] Read employment contract clauses on IP assignment and outside work. Record "clear / needs legal / blocked" in DEVLOG.
 - [ ] T04 [owner] Create a free Confluence + Jira dev site; run `forge register` once locally (fills `app.id`); add `FORGE_EMAIL` and `FORGE_API_TOKEN` as GitHub Actions secrets. Commit the `app.id` change.
 - [ ] T05 `forge lint` clean. needs: T04. *(partial 2026-11-11: manifest validates against the official JSON schema via `npm run validate:manifest`; `forge lint` itself needs a logged-in CLI)* Fix every manifest/module error it reports (module names, `sql`/`llm` syntax, resource paths). Record each fix in DEVLOG — this is where docs and reality meet.
 - [ ] T06 First deploy to development; nightly trigger fires; dashboard renders. needs: T05. Verify each REST endpoint in `src/forge/*` against the dev site and fix drift. Record HTTP shapes that differed.

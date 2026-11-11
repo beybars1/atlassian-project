@@ -137,7 +137,6 @@ Dev loop: `forge tunnel` against a free dev site; Claude Code with Forge MCP for
 ## 10. Open questions
 
 - [ ] Marketplace partner payouts to a Kazakhstan entity — confirm with Atlassian partner support; fallback entity (Estonia e-Residency, US LLC) and its cost.
-- [ ] Employment contract: IP assignment and outside-activity clause. Product touches nothing in banking, but read it.
 - [ ] Forge platform pricing beyond the free allowance — get the current allowance table and model 100-site usage.
 - [ ] Confluence REST v2 rate limits for a 10k-page site — measure on the dev site; may need weekly full scans + daily incremental.
 - [ ] Does the Confluence search analytics API exist for check 9, or is that Premium-only / not exposed.
