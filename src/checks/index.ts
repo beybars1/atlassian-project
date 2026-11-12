@@ -2,10 +2,11 @@ import type { Check, Clients, Finding, PageRecord } from "./types";
 import { deadLinks } from "./deadLinks";
 import { ownerGone } from "./ownerGone";
 import { jiraRefDrift } from "./jiraRefDrift";
+import { jiraNameDrift } from "./jiraNameDrift";
 import { placeholders } from "./placeholders";
 
 /** v0 checks, in the order they run. Checks 5–6 (LLM) are added in week 3. */
-export const V0_CHECKS: Check[] = [deadLinks, ownerGone, jiraRefDrift, placeholders];
+export const V0_CHECKS: Check[] = [deadLinks, ownerGone, jiraRefDrift, jiraNameDrift, placeholders];
 
 export async function runChecks(page: PageRecord, clients: Clients, checks = V0_CHECKS): Promise<Finding[]> {
   const results = await Promise.allSettled(checks.map((c) => c(page, clients)));

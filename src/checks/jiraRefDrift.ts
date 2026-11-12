@@ -3,7 +3,7 @@ import type { Check, Finding, IssueInfo } from "./types";
 /**
  * Check 3 — Jira references on the page that no longer mean what the page implies.
  * v0 covers issue keys: deleted, moved, or resolved while the page talks about them as open.
- * Components and versions are a follow-up task (see TASKS.md).
+ * Component and version names are covered by `jiraNameDrift.ts` (same check code).
  */
 export const jiraRefDrift: Check = async (page, clients): Promise<Finding[]> => {
   if (page.issueKeys.length === 0) return [];

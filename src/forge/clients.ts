@@ -6,13 +6,15 @@
  * First deploy task: hit each of these against the dev site and fix any that drifted.
  */
 import { route } from "@forge/api";
-import type { Clients, IssueInfo } from "../checks/types";
+import type { Clients, ComponentInfo, IssueInfo, VersionInfo } from "../checks/types";
 import { confluenceGet, jiraGet } from "./http";
 
 const cache = {
   users: new Map<string, boolean | undefined>(),
   issues: new Map<string, IssueInfo>(),
   pagesById: new Map<string, boolean>(),
+  components: new Map<string, ComponentInfo[]>(),
+  versions: new Map<string, VersionInfo[]>(),
   projectKeys: undefined as Set<string> | undefined,
 };
 
@@ -79,6 +81,44 @@ export function forgeClients(): Clients {
         }
         cache.projectKeys = keys;
         return keys;
+      },
+      async getComponents(projectKey) {
+        const hit = cache.components.get(projectKey);
+        if (hit) return hit;
+        // Not paginated: returns every component of the project.
+        const res = await jiraGet(route`/rest/api/3/project/${projectKey}/components`);
+        let list: ComponentInfo[] = [];
+        if (res.status === 200) {
+          const body = (await res.json()) as Array<{ id: string; name: string; archived?: boolean }>;
+          list = body.map((c) => ({ id: c.id, name: c.name, archived: !!c.archived }));
+        }
+        cache.components.set(projectKey, list);
+        return list;
+      },
+      async getVersions(projectKey) {
+        const hit = cache.versions.get(projectKey);
+        if (hit) return hit;
+        // Not paginated: returns every version of the project.
+        const res = await jiraGet(route`/rest/api/3/project/${projectKey}/versions`);
+        let list: VersionInfo[] = [];
+        if (res.status === 200) {
+          const body = (await res.json()) as Array<{
+            id: string;
+            name: string;
+            archived?: boolean;
+            released?: boolean;
+            releaseDate?: string;
+          }>;
+          list = body.map((v) => ({
+            id: v.id,
+            name: v.name,
+            archived: !!v.archived,
+            released: !!v.released,
+            releaseDate: v.releaseDate,
+          }));
+        }
+        cache.versions.set(projectKey, list);
+        return list;
       },
     },
     users: {
