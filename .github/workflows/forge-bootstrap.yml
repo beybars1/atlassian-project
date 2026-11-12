@@ -23,6 +23,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx forge settings set usage-analytics false
       - name: Register app if needed
         run: |
           if grep -q "REPLACE-WITH-FORGE-REGISTER" manifest.yml; then

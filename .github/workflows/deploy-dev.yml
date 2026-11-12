@@ -23,6 +23,8 @@ jobs:
         run: if grep -q REPLACE-WITH-FORGE-REGISTER manifest.yml; then echo skip=true >> $GITHUB_OUTPUT; fi
       - run: npm ci
         if: steps.reg.outputs.skip != 'true'
+      - run: npx forge settings set usage-analytics false
+        if: steps.reg.outputs.skip != 'true'
       - run: npx forge lint
         if: steps.reg.outputs.skip != 'true'
       - run: npx forge deploy -e development --non-interactive
