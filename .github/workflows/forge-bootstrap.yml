@@ -26,6 +26,7 @@ jobs:
       - name: Register app if needed
         run: |
           if grep -q "REPLACE-WITH-FORGE-REGISTER" manifest.yml; then
+            npx forge whoami --verbose || true
             npx forge developer-spaces list --json > spaces.json || true
             SPACE_ID=$(node -e '
               const fs=require("fs"); let d; try{d=JSON.parse(fs.readFileSync("spaces.json","utf8"))}catch{process.exit(0)}
