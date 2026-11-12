@@ -59,4 +59,4 @@ permissions:
 app:
   runtime:
     name: nodejs22.x
-  id: ari:cloud:ecosystem::app/REPLACE-WITH-FORGE-REGISTER
+  id: ari:cloud:ecosystem::app/b43871f1-ff9a-41dc-bfcf-ab3735d48cef
