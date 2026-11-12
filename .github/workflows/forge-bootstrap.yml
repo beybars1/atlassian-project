@@ -1,0 +1,60 @@
+# One-time (and re-runnable) bootstrap: registers the Forge app if manifest still has the placeholder id,
+# deploys to development and installs on the dev site. Site comes from the run input, never from the repo.
+name: forge-bootstrap
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: "Dev site host, e.g. example.atlassian.net"
+        required: true
+permissions:
+  contents: write
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    env:
+      FORGE_EMAIL: ${{ secrets.FORGE_EMAIL }}
+      FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+      FORGE_DISABLE_ANALYTICS: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Register app if needed
+        run: |
+          if grep -q "REPLACE-WITH-FORGE-REGISTER" manifest.yml; then
+            npx forge developer-spaces list --json > spaces.json || true
+            SPACE_ID=$(node -e '
+              const fs=require("fs"); let d; try{d=JSON.parse(fs.readFileSync("spaces.json","utf8"))}catch{process.exit(0)}
+              const find=o=>{if(!o||typeof o!=="object")return; if(Array.isArray(o)){for(const x of o){const r=find(x); if(r)return r}return}
+                if(typeof o.id==="string")return o.id; for(const v of Object.values(o)){const r=find(v); if(r)return r}};
+              const id=find(d); if(id)console.log(id)')
+            rm -f spaces.json
+            if [ -n "$SPACE_ID" ]; then
+              npx forge register WikiVerify --accept-terms --developer-space-id "$SPACE_ID"
+            else
+              npx forge register WikiVerify --accept-terms
+            fi
+            git config user.name "wikiverify-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add manifest.yml
+            git commit -m "forge register (bootstrap)"
+            git push
+          else
+            echo "app already registered"
+          fi
+      - run: npm run validate:manifest
+      - run: npx forge lint
+      - run: npx forge deploy -e development --non-interactive
+      - name: Install on Confluence
+        run: |
+          npx forge install --site "${{ inputs.site }}" --product confluence -e development --confirm-scopes --non-interactive \
+          || npx forge install --upgrade --site "${{ inputs.site }}" --product confluence -e development --confirm-scopes --non-interactive
+      - name: Install on Jira
+        continue-on-error: true
+        run: |
+          npx forge install --site "${{ inputs.site }}" --product jira -e development --confirm-scopes --non-interactive \
+          || npx forge install --upgrade --site "${{ inputs.site }}" --product jira -e development --confirm-scopes --non-interactive

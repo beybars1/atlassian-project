@@ -18,6 +18,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Skip until registered
+        id: reg
+        run: if grep -q REPLACE-WITH-FORGE-REGISTER manifest.yml; then echo skip=true >> $GITHUB_OUTPUT; fi
       - run: npm ci
+        if: steps.reg.outputs.skip != 'true'
       - run: npx forge lint
+        if: steps.reg.outputs.skip != 'true'
       - run: npx forge deploy -e development --non-interactive
+        if: steps.reg.outputs.skip != 'true'
