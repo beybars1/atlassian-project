@@ -4,6 +4,23 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-12 (Thu) — app registered, deployed, installed
+
+**Done**
+- Owner: partner profile created under the product brand; dev site created; Forge secrets added to GitHub.
+- `forge-bootstrap` workflow: registers the app (app.id committed), deploys to development, installs on Confluence + Jira of the dev site (site passed as run input, not stored).
+- Fixed: tsconfig `noEmit` broke Forge's ts-loader bundling; Forge CLI analytics prompt fails in non-TTY CI — disabled via `forge settings set usage-analytics false`.
+- `deploy-dev` now deploys on every merge to main.
+
+**Learned**
+- `UserNotFoundError` from Forge CLI = bad email/token pair (here: trailing space in the secret).
+- Workflow dispatch is not available to agent sessions; manual runs need the owner (one click).
+
+**Next**
+- T06 remainder: open the dashboard on the dev site, confirm the nightly trigger runs, verify REST endpoint shapes.
+
+---
+
 ## 2026-11-11 (Tue, night) — T10 rate-limit handling
 
 **Done**
