@@ -4,6 +4,26 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-11 (Tue, night) — T10 rate-limit handling
+
+**Done**
+- `src/forge/rateLimit.ts` (pure, no `@forge/*`): `withRetry` retries 429/503 only, honours `Retry-After` as delay-seconds or HTTP-date, otherwise exponential backoff 500 ms → 10 s with 0.5x–1.5x jitter; 4 attempts, 30 s total wait budget per request. When the budget is exhausted the last response is returned, not thrown — callers already treat non-200 as "unknown, don't flag", so a rate-limit episode degrades to "no finding" (conservative). `createLimiter(n)`: FIFO semaphore.
+- `src/forge/http.ts`: `confluenceGet` / `jiraGet` — the only callers of `api.asApp().request*`; limiter at 4 in-flight requests per invocation (= per batch) + the retry policy, retries logged with `console.warn`. `clients.ts` and `confluencePages.ts` now go through it; no behaviour change on the happy path.
+- 17 new tests with a scripted fake fetch and a fake clock (sleep advances time). 34 total green; typecheck and manifest validation green.
+
+**Learned**
+- `Date.parse("-3")` is a valid year in V8, so a `Retry-After` parser must require letters before treating the value as an HTTP-date.
+- The budget (30 s) is a guess at what fits inside the async-events consumer timeout; T06 must confirm the real limit and, if the consumer gets much more time, the budget can go up.
+
+**Next**
+- Agent (unblocked): T11 components/versions drift, T12 attachments/anchors, T15, T16 remaining steps.
+- Added T10a (re-enqueue the unscanned remainder of a batch after an exhausted budget) — needs T06 for the real retry semantics.
+- Owner: T02, T04 still block T05 → T06 → T07 → T09 → T13 (live rate-limit verification).
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-11 (Tue) — T08 done, T14 done, manifest validated, T16 started
 
 **Done**

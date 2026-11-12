@@ -1,6 +1,7 @@
-import api, { route } from "@forge/api";
+import { route } from "@forge/api";
 import type { PageRecord } from "../checks/types";
 import { parseStorage } from "../text/storageToText";
+import { confluenceGet } from "./http";
 
 export interface PageHead {
   id: string;
@@ -17,7 +18,7 @@ export async function listPageHeads(spaceId: string): Promise<PageHead[]> {
     const path = cursor
       ? route`/wiki/api/v2/spaces/${spaceId}/pages?limit=250&status=current&cursor=${cursor}`
       : route`/wiki/api/v2/spaces/${spaceId}/pages?limit=250&status=current`;
-    const res = await api.asApp().requestConfluence(path);
+    const res = await confluenceGet(path);
     if (res.status !== 200) throw new Error(`list pages ${spaceId}: HTTP ${res.status}`);
     const body = (await res.json()) as {
       results: Array<{ id: string; spaceId: string; title: string; version: { number: number } }>;
@@ -33,9 +34,7 @@ export async function listPageHeads(spaceId: string): Promise<PageHead[]> {
 
 /** Fetch one page with storage body, owner and labels, parsed into a PageRecord. */
 export async function fetchPage(pageId: string, spaceKey?: string): Promise<PageRecord> {
-  const res = await api
-    .asApp()
-    .requestConfluence(route`/wiki/api/v2/pages/${pageId}?body-format=storage&include-labels=true`);
+  const res = await confluenceGet(route`/wiki/api/v2/pages/${pageId}?body-format=storage&include-labels=true`);
   if (res.status !== 200) throw new Error(`fetch page ${pageId}: HTTP ${res.status}`);
   const p = (await res.json()) as {
     id: string;
