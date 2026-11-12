@@ -17,7 +17,7 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 - [ ] T09 Incremental scan proven: second nightly run scans only changed pages (assert via `scan_runs`). needs: T07.
 - [x] T10 Rate-limit handling: back off on 429 from Confluence/Jira, respect `Retry-After`, cap concurrency per batch. Code-only with a fake fetch in tests; live verification is part of T13. needs: T01. *(done 2026-11-11 → `src/forge/rateLimit.ts` + `src/forge/http.ts`; 17 tests)*
 - [ ] T10a Batch resumption after an exhausted rate-limit budget: when `fetchPage` still gets 429/503 after retries, re-enqueue the unscanned remainder of the batch (Forge async events retry / a follow-up `queue.push`) instead of skipping those pages until the next night. needs: T06 (needs the real consumer timeout and retry semantics).
-- [ ] T11 Jira ref drift: components and versions (archived/released/deleted) mentioned by name. Planted faults + tests. needs: T01.
+- [x] T11 Jira ref drift: components and versions (archived/released/deleted) mentioned by name. Planted faults + tests. needs: T01. *(done 2026-11-12 → `src/checks/jiraNameDrift.ts`; archived + released-as-upcoming only — deleted names are not listed by Jira, so they are not detectable; 10 tests)*
 - [ ] T12 Dead-link check for Confluence attachments and anchors within the same page. needs: T01.
 - [ ] T13 Measured precision on the seeded space ≥ 90% for checks 1–4; false positives fixed or the pattern removed. needs: T09.
 
