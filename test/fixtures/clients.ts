@@ -4,6 +4,8 @@ import type { Clients, ComponentInfo, IssueInfo, VersionInfo } from "../../src/c
 export function fakeClients(world: {
   pagesById?: string[];
   pagesByTitle?: Array<[spaceKey: string, title: string]>;
+  /** Attachment filenames per page id. Missing page → undefined (list unavailable → the check flags nothing). */
+  attachments?: Record<string, string[]>;
   issues?: Record<string, Partial<IssueInfo>>;
   projectKeys?: string[];
   /** Per project key. Missing project → no components (the check flags nothing). */
@@ -19,6 +21,7 @@ export function fakeClients(world: {
     confluence: {
       async pageExistsById(id) { return byId.has(id); },
       async pageExistsByTitle(space, title) { return byTitle.has(`${space}:${title}`); },
+      async attachmentFilenames(pageId) { return world.attachments?.[pageId]; },
     },
     jira: {
       async getIssue(key) {

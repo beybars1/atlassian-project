@@ -13,10 +13,13 @@ const cache = {
   users: new Map<string, boolean | undefined>(),
   issues: new Map<string, IssueInfo>(),
   pagesById: new Map<string, boolean>(),
+  attachments: new Map<string, string[] | undefined>(),
   components: new Map<string, ComponentInfo[]>(),
   versions: new Map<string, VersionInfo[]>(),
   projectKeys: undefined as Set<string> | undefined,
 };
+
+let warnedAttachmentScope = false;
 
 export function forgeClients(): Clients {
   return {
@@ -37,6 +40,36 @@ export function forgeClients(): Clients {
         if (res.status !== 200) return true;
         const body = (await res.json()) as { results?: unknown[] };
         return (body.results?.length ?? 0) > 0;
+      },
+      async attachmentFilenames(pageId) {
+        if (cache.attachments.has(pageId)) return cache.attachments.get(pageId);
+        // v2 attachment `title` is the filename. Needs `read:attachment:confluence`; without it the
+        // endpoint answers 403 and the attachment check stays silent (undefined → nothing flagged).
+        const names: string[] = [];
+        let cursor: string | undefined;
+        let ok = true;
+        for (;;) {
+          const path = cursor
+            ? route`/wiki/api/v2/pages/${pageId}/attachments?limit=250&cursor=${cursor}`
+            : route`/wiki/api/v2/pages/${pageId}/attachments?limit=250`;
+          const res = await confluenceGet(path);
+          if (res.status !== 200) {
+            ok = false;
+            if (res.status === 403 && !warnedAttachmentScope) {
+              warnedAttachmentScope = true;
+              console.warn("attachments: HTTP 403 — add the read:attachment:confluence scope to enable the attachment check");
+            }
+            break;
+          }
+          const body = (await res.json()) as { results?: Array<{ title?: string }>; _links?: { next?: string } };
+          body.results?.forEach((a) => a.title && names.push(a.title));
+          const next = body._links?.next;
+          cursor = next ? new URL(next, "https://x").searchParams.get("cursor") ?? undefined : undefined;
+          if (!cursor) break;
+        }
+        const result = ok ? names : undefined;
+        cache.attachments.set(pageId, result);
+        return result;
       },
     },
     jira: {

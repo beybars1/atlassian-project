@@ -4,6 +4,28 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-13 (Fri, night) — T12 attachments + same-page anchors
+
+**Done**
+- `parseStorage` now also returns `attachments` (`<ri:attachment>` inside `<ac:image>` / `<ac:link>` / file macros, plus `/wiki/download/attachments/{id}/{file}` hrefs, URL- and entity-decoded; a nested `<ri:page>` marks an attachment that lives on another page) and `anchors` (`#target` hrefs and `<ac:link ac:anchor>` without a page reference, anchor-macro names, element ids, heading texts, and whether the page includes other pages).
+- `src/checks/deadAttachments.ts` (`DEAD_LINK`, medium / high at ≥3): compares references against `Clients.confluence.attachmentFilenames(pageId)`; case-only differences are not findings; attachments on another page referenced *by title* are skipped (resolving costs a request per reference and a wrong guess is a false positive). `undefined` from the client (403, error) → nothing flagged.
+- `src/checks/deadAnchors.ts` (`DEAD_LINK`, low): a target is alive if it matches an anchor macro, an id, or a heading in any Confluence form — comparison drops case and non-alphanumerics, accepts the legacy `PageTitle-Heading` prefix and the `.1` duplicate-heading suffix; `#top` / `#` ignored; pages with include / excerpt-include macros are skipped. No API calls.
+- Forge client: v2 `GET /wiki/api/v2/pages/{id}/attachments` (cursor-paged, `title` = filename), cached per page, one warning on 403.
+- Planted-fault fixture `STORAGE_RUNBOOK_LOCAL_REFS` (3 attachment faults, 2 anchor faults, 9 planted non-faults). 14 new tests; 58 total green; typecheck + manifest validation green.
+
+**Learned**
+- Listing attachments needs `read:attachment:confluence`, which the manifest does not have, and scopes are owner-only. Shipped without the manifest change: the client returns `undefined` on 403, so the attachment check is a no-op until the owner adds the scope (T12a added right below T12). The anchor check works today.
+- Heading anchors have had several generated forms (spaces dropped, title-prefixed, numeric suffix for duplicates); normalising both sides to `[a-z0-9]` makes the check editor-agnostic and keeps it conservative.
+- `<ri:page>` nested inside `<ri:attachment>` is already collected by the page-link pass, so a missing *page* behind a cross-page attachment is reported by check 1 as before; only the file itself is unresolved.
+
+**Next**
+- Owner: T12a (scope decision), T06 verification on the dev site.
+- Agent (unblocked): T15 page-type classification, T16 remaining steps.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-12 (Thu, night) — T11 component / version name drift
 
 **Done**

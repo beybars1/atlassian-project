@@ -60,5 +60,7 @@ export async function fetchPage(pageId: string, spaceKey?: string): Promise<Page
     text: parsed.text,
     links: parsed.links,
     issueKeys: parsed.issueKeys,
+    attachments: parsed.attachments,
+    anchors: parsed.anchors,
   };
 }
