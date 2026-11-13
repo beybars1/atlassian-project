@@ -4,6 +4,27 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-12 (Thu, night) — T11 component / version name drift
+
+**Done**
+- `src/checks/jiraNameDrift.ts` (same `JIRA_REF_DRIFT` code as check 3): project context comes only from issue keys on the page; for each such project the archived components, archived versions, and released versions that the page still calls planned/upcoming are reported. Archived component → medium, versions → low. One finding per category, names grouped.
+- Matching is deliberately strict: single-word component names need exact case plus the word "component" in the same clause; multi-word or digit-bearing names match case-insensitively; version names need a release word ("version", "release", "shipped", …) in the same clause or a direct `v` prefix, and never match inside a longer version ("2.3" vs "2.3.1"). Names under 3 characters are ignored.
+- `Clients.jira.getComponents/getVersions` added (interface, fake, Forge impl via `/rest/api/3/project/{key}/components|versions`, cached per project; empty list on any non-200 → check flags nothing). Existing `read:jira-work` scope covers both endpoints — no manifest change.
+- Planted-fault fixture `STORAGE_RELEASE_PLAN_WITH_FAULTS` with 3 faults and 5 planted non-faults (a component called "Pricing", versions "2.3"/"1.0" appearing as a percentage and a contract section, an archived component in a project the page never mentions). 10 new tests; 44 total green; typecheck + manifest validation green.
+
+**Learned**
+- A ±N-character window is the wrong unit for context words: "Version 2.4.0 is current. Fix version 3.0.0 is planned" put "planned" inside 2.4.0's window and produced a false positive. Clause (sentence / semicolon / block) boundaries fix it; applied to every context test in the check.
+- Deleted components/versions cannot be detected from the project lists — Jira drops them. If the owner wants deleted names caught, that is the rename-propagation changelog work in T19a, not this check.
+- T06 remainder (dashboard renders, trigger fires, REST shapes vs the live site) needs a logged-in Forge CLI / the dev site; neither is reachable from the agent session, so it is effectively owner-gated until the owner runs it or exposes `forge logs` output. Took T11 instead (needs: T01 only).
+
+**Next**
+- Agent (unblocked): T12 attachments/anchors dead-link check, T15, T16 remaining steps.
+- Owner: T06 verification on the dev site; T07 seed script needs it.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-12 (Thu) — app registered, deployed, installed
 
 **Done**

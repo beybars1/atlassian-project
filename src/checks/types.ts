@@ -65,6 +65,21 @@ export interface IssueInfo {
   movedTo?: string;
 }
 
+export interface ComponentInfo {
+  id: string;
+  name: string;
+  archived: boolean;
+}
+
+export interface VersionInfo {
+  id: string;
+  name: string;
+  archived: boolean;
+  released: boolean;
+  /** ISO date when Jira has one. */
+  releaseDate?: string;
+}
+
 export interface Clients {
   confluence: {
     pageExistsById(pageId: string): Promise<boolean>;
@@ -74,6 +89,10 @@ export interface Clients {
     getIssue(key: string): Promise<IssueInfo>;
     /** Project keys that exist on the site; used to avoid false positives like "ISO-9001". */
     knownProjectKeys(): Promise<Set<string>>;
+    /** Components of a project. Empty on any error — the check then flags nothing. */
+    getComponents(projectKey: string): Promise<ComponentInfo[]>;
+    /** Versions (fixVersions) of a project. Empty on any error — the check then flags nothing. */
+    getVersions(projectKey: string): Promise<VersionInfo[]>;
   };
   users: {
     isActive(accountId: string): Promise<boolean | undefined>;
