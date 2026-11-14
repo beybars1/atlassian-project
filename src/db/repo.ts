@@ -2,7 +2,7 @@
  * Storage interface + an in-memory implementation for tests.
  * The Forge SQL implementation lives in forgeSqlRepo.ts and is wired in src/index.ts.
  */
-import type { Finding } from "../checks/types";
+import type { Finding, PageType } from "../checks/types";
 
 export interface ScannedPage {
   pageId: string;
@@ -12,6 +12,8 @@ export interface ScannedPage {
   ownerId?: string;
   lastModified: string;
   scannedAt: string;
+  /** Check 5 classification, valid for `version` only (T15). */
+  pageType?: PageType;
 }
 
 export interface ScanRun {
@@ -25,6 +27,8 @@ export interface ScanRun {
 
 export interface Repo {
   getScannedVersions(spaceId: string): Promise<Map<string, number>>;
+  /** Last stored state of one page (version + cached page type); undefined if never scanned. */
+  getPage(pageId: string): Promise<ScannedPage | undefined>;
   upsertPage(p: ScannedPage): Promise<void>;
   replaceFindings(pageId: string, findings: Finding[]): Promise<void>;
   openFindings(spaceId: string, limit: number): Promise<Array<{ page: ScannedPage; findings: Finding[] }>>;
@@ -41,6 +45,9 @@ export class MemoryRepo implements Repo {
     const m = new Map<string, number>();
     for (const p of this.pages.values()) if (p.spaceId === spaceId) m.set(p.pageId, p.version);
     return m;
+  }
+  async getPage(pageId: string) {
+    return this.pages.get(pageId);
   }
   async upsertPage(p: ScannedPage) {
     this.pages.set(p.pageId, p);

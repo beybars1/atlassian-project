@@ -94,3 +94,22 @@ export const STORAGE_RELEASE_PLAN_CLEAN = `
 <p>New work goes to the Card Vault component. Version 2.4.0 is the current supported line.</p>
 <p>Fix version 3.0.0 shipped in October.</p>
 `;
+
+/**
+ * T15 — stale by type. A runbook with no other faults. Planted fault: last edited 2026-01-01 and
+ * scanned on 2026-11-14 (317 days) against the 180-day runbook default → STALE_BY_TYPE (medium).
+ * Planted non-faults: the same body typed as decision / meeting-notes / other, or edited within
+ * the threshold, must not be flagged. Long enough (> MIN_CLASSIFY_CHARS) to reach the LLM classifier.
+ */
+export const STORAGE_STALE_RUNBOOK = `
+<h1>Payments service runbook</h1>
+<p>Owner: platform team. On-call: #payments-oncall.</p>
+<h2>Symptoms</h2>
+<p>Elevated 5xx on /charge, queue depth above 10k, or the ledger reconciliation job skipping a run.</p>
+<h2>Diagnosis</h2>
+<p>Check the service dashboard, then the database connection pool. If the pool is exhausted, restart one replica at a time.</p>
+<h2>Recovery</h2>
+<p>Scale the consumer group to 6, drain the dead-letter queue, and re-run reconciliation for the affected day.</p>
+<h2>Escalation</h2>
+<p>Page the platform lead if recovery takes longer than 30 minutes.</p>
+`;

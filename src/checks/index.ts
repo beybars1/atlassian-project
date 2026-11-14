@@ -7,7 +7,10 @@ import { jiraRefDrift } from "./jiraRefDrift";
 import { jiraNameDrift } from "./jiraNameDrift";
 import { placeholders } from "./placeholders";
 
-/** v0 checks, in the order they run. Checks 5–6 (LLM) are added in week 3. */
+/**
+ * v0 checks that need nothing beyond the page and the clients, in the order they run.
+ * Check 5 (`staleByType`) is appended by the worker with the admin thresholds; check 6 (T16) follows.
+ */
 export const V0_CHECKS: Check[] = [
   deadLinks,
   deadAttachments,
