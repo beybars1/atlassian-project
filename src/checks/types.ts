@@ -36,6 +36,31 @@ export interface PageLink {
   external: boolean;
 }
 
+/** A reference to a Confluence attachment found in the page body. */
+export interface AttachmentRef {
+  /** Filename exactly as written in the page (entity- and URL-decoded). */
+  filename: string;
+  /** `image` = <ac:image>, `link` = <ac:link> or a file macro, `download` = /wiki/download/attachments/… href. */
+  kind: "image" | "link" | "download";
+  /** Owning page when it is not this page (download links carry the id). */
+  pageId?: string;
+  /** Owning page referenced by title (<ri:attachment><ri:page …/></ri:attachment>); not resolvable here. */
+  pageTitle?: string;
+  spaceKey?: string;
+}
+
+/** Same-page anchor material: what the page links to and what it defines. */
+export interface PageAnchors {
+  /** `#target` hrefs and <ac:link ac:anchor> without a page reference, in document order. */
+  targets: string[];
+  /** Anchor macro names and element `id` attributes. */
+  names: string[];
+  /** Heading texts (h1–h6) in document order; Confluence derives anchors from them. */
+  headings: string[];
+  /** True when an include / excerpt-include macro can bring anchors from another page. */
+  hasIncludes: boolean;
+}
+
 export interface PageRecord {
   id: string;
   spaceId: string;
@@ -51,6 +76,10 @@ export interface PageRecord {
   links: PageLink[];
   /** Jira issue keys mentioned in text or macros. */
   issueKeys: string[];
+  /** Attachment references in the body (T12). */
+  attachments: AttachmentRef[];
+  /** Same-page anchor targets and definitions (T12). */
+  anchors: PageAnchors;
 }
 
 export interface IssueInfo {
@@ -84,6 +113,11 @@ export interface Clients {
   confluence: {
     pageExistsById(pageId: string): Promise<boolean>;
     pageExistsByTitle(spaceKey: string, title: string): Promise<boolean>;
+    /**
+     * Filenames of the current attachments of a page. `undefined` when the list could not be
+     * fetched (missing scope, error, page gone) — the check then flags nothing.
+     */
+    attachmentFilenames(pageId: string): Promise<string[] | undefined>;
   };
   jira: {
     getIssue(key: string): Promise<IssueInfo>;
