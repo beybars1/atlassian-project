@@ -25,7 +25,8 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 ## Week 3 — LLM checks + UI (24–30 Nov)
 
 - [x] T14 `src/llm/client.ts`: thin wrapper over `@forge/llm` with model constants, tool-calling helper, token logging. *(done 2026-11-11 against real `@forge/llm` types; wiring token totals into `scan_runs` moves to T17)*
-- [ ] T15 Check 5 STALE_BY_TYPE: Haiku classifies page type once per version (runbook / how-to / onboarding / decision / meeting-notes / other) → threshold per type (admin-configurable, defaults in code). needs: T14.
+- [x] T15 Check 5 STALE_BY_TYPE: Haiku classifies page type once per version (runbook / how-to / onboarding / decision / meeting-notes / other) → threshold per type (admin-configurable, defaults in code). needs: T14. *(done 2026-11-14 → `src/llm/classifyPage.ts`, `src/checks/staleByType.ts`; labels and titles decide before Haiku; type cached in `pages.page_type` (migration v002); thresholds on the dashboard; 22 tests)*
+- [ ] T15a Verify check 5 on the dev site: Haiku classification quality on ~30 real pages (precision of `runbook` / `how-to` / `onboarding` labels), real token cost per classification, and that migration `v002_pages_page_type` applies on an installed site. needs: T06.
 - [ ] T16 Check 6 CONTRADICTION *(step 1 done 2026-11-11: `extractFacts` + `findConflicts` with tests; remaining: `facts` table, Sonnet adjudication, finding output)*: Haiku extracts `{entity, attribute, value, quote}` facts per page → stored in `facts` table → conflicts by `(entity, attribute)` across pages in a space → Sonnet adjudicates with page dates + Jira evidence. needs: T14.
 - [ ] T17 Cost report: tokens and $ per scan run shown on the dashboard; alert in DEVLOG if a 2,000-page scan exceeds $10. needs: T15, T16.
 - [ ] T18 Dashboard v1: per-space tabs, severity filter, "dismiss finding" (status → dismissed, persists across scans), link to page. needs: T16.

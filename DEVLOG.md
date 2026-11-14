@@ -4,6 +4,28 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-14 (Sat, night) — T15 check 5 STALE_BY_TYPE
+
+**Done**
+- `src/llm/classifyPage.ts`: page type resolved in three tiers — labels (`runbook`, `how-to`, `onboarding`, `adr`, `meeting-notes`, … ; conflicting labels → undecided), title patterns but only for the two types that are never flagged (meeting notes, decision records — a wrong guess there costs nothing), then Haiku via a forced `classify_page` tool call (`type` enum + `confidence`). Only `confidence: "high"` counts; medium/low or an unknown type → `other`. Pages under 200 chars are `other` without a call; prompts are cut at 8k chars. No LLM available → `undefined`, not cached, so a non-answer never freezes into the cache.
+- `src/checks/staleByType.ts`: `makeStaleByType(thresholds)`; defaults runbook 180 d, how-to 365 d, onboarding 180 d, decision / meeting-notes / other off. Medium at the threshold, high at 2×. Silent on unknown type, a type with no threshold, or an unparseable / future date. `parseStaleThresholds` validates admin input (1–3650 or numeric strings; `null`/empty = off; `other` always off).
+- Cache: `Repo.getPage` + `pages.page_type` (Forge SQL migration `v002_pages_page_type` as an `ALTER TABLE`; v001 left untouched because a migration runs once per name). Worker reuses the type when the stored version matches, otherwise reclassifies; a classifier error logs and leaves the type unknown — the other checks still run.
+- Worker appends check 5 to `V0_CHECKS` with thresholds from KVS `config.staleDays`; sums LLM tokens per batch into one log line (per-call logging already in the client). Dashboard: one field per type + "Save thresholds"; resolvers `getStaleDays` / `setStaleDays`.
+- Fixture `STORAGE_STALE_RUNBOOK` (planted fault: 317 days old vs 180). 22 new tests incl. the worker end-to-end with `fetchPage` mocked (classify once per version, cached on re-run, reclassified on a new version). 80 total green; typecheck + manifest validation green.
+
+**Learned**
+- Classification is the place to be conservative, not the date check: the date is a fact, the type is a guess. Hence "high confidence or `other`", and labels/titles only pre-empt Haiku where a miss is free or the author said so explicitly.
+- `vi.mock` is hoisted above `const`s in the test file; shared state for a mock factory needs `vi.hoisted`.
+- `Date.parse` on the ISO `version.createdAt` is fine; the check floors to whole days so a page edited 179.9 days ago is not flagged at a 180-day threshold.
+
+**Next**
+- Agent (unblocked): T16 remaining steps (`facts` table, Sonnet adjudication, finding output).
+- Owner: T06 verification on the dev site unblocks T15a (classifier precision + real cost) and T07.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-13 (Fri, night) — T12 attachments + same-page anchors
 
 **Done**
