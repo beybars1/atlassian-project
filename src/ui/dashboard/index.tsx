@@ -3,7 +3,7 @@
  * Kept minimal; replace with Custom UI if the table needs more than UI Kit offers.
  */
 import React, { useEffect, useState } from "react";
-import ForgeReconciler, { Text, Button, Heading, Stack, Textfield, DynamicTable, Lozenge } from "@forge/react";
+import ForgeReconciler, { Text, Button, Heading, Stack, Inline, Label, Textfield, DynamicTable, Lozenge } from "@forge/react";
 import { invoke as forgeInvoke } from "@forge/bridge";
 
 /** invoke() may wrap the result in { body }; unwrap once here. */
@@ -13,6 +13,15 @@ async function invoke<T>(fn: string, payload?: Record<string, unknown>): Promise
 }
 
 type SpaceConfig = { spaceId: string; spaceKey?: string };
+/** Check 5 thresholds (days); null = that type is never flagged. Mirrors `StaleThresholds` in src/checks. */
+type StaleDays = Record<string, number | null>;
+const STALE_TYPES: Array<[key: string, label: string]> = [
+  ["runbook", "Runbooks"],
+  ["how-to", "How-to guides"],
+  ["onboarding", "Onboarding"],
+  ["decision", "Decision records"],
+  ["meeting-notes", "Meeting notes"],
+];
 type Row = {
   page: { pageId: string; title: string; lastModified: string };
   findings: Array<{ check: string; severity: "high" | "medium" | "low"; evidence: string }>;
@@ -23,6 +32,7 @@ const App = () => {
   const [draft, setDraft] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
+  const [staleDraft, setStaleDraft] = useState<Record<string, string>>({});
 
   useEffect(() => {
     invoke<SpaceConfig[]>("getSpaces").then((s: SpaceConfig[]) => {
@@ -30,7 +40,17 @@ const App = () => {
       setDraft(s.map((x: SpaceConfig) => x.spaceId).join(","));
       if (s[0]) invoke<Row[]>("topFindings", { spaceId: s[0].spaceId }).then(setRows);
     });
+    invoke<StaleDays>("getStaleDays").then((d: StaleDays) =>
+      setStaleDraft(Object.fromEntries(STALE_TYPES.map(([k]) => [k, d[k] == null ? "" : String(d[k])]))),
+    );
   }, []);
+
+  const saveStale = async () => {
+    // Empty field = off; the resolver validates and returns what it stored.
+    const staleDays = Object.fromEntries(STALE_TYPES.map(([k]) => [k, staleDraft[k]?.trim() === "" ? null : staleDraft[k]]));
+    const stored = await invoke<StaleDays>("setStaleDays", { staleDays });
+    setStaleDraft(Object.fromEntries(STALE_TYPES.map(([k]) => [k, stored[k] == null ? "" : String(stored[k])])));
+  };
 
   const save = async () => {
     const next = draft.split(",").map((x) => x.trim()).filter(Boolean).map((spaceId) => ({ spaceId }));
@@ -53,6 +73,22 @@ const App = () => {
       <Button onClick={run} isDisabled={busy || spaces.length === 0}>
         {busy ? "Queued…" : "Scan now"}
       </Button>
+      <Heading as="h3">Stale-page thresholds</Heading>
+      <Text>Days since the last edit after which a page of each type is reported. Leave empty to never report that type.</Text>
+      <Inline space="space.200" shouldWrap>
+        {STALE_TYPES.map(([key, label]) => (
+          <Stack key={key} space="space.050">
+            <Label labelFor={`stale-${key}`}>{label}</Label>
+            <Textfield
+              id={`stale-${key}`}
+              width="small"
+              value={staleDraft[key] ?? ""}
+              onChange={(e: any) => setStaleDraft({ ...staleDraft, [key]: e.target.value })}
+            />
+          </Stack>
+        ))}
+      </Inline>
+      <Button onClick={saveStale}>Save thresholds</Button>
       <DynamicTable
         head={{ cells: [{ content: "Page" }, { content: "Severity" }, { content: "What is wrong" }] }}
         rows={rows.map((r) => ({

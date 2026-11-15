@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS pages (
   owner_id      VARCHAR(128) NULL,
   last_modified DATETIME     NOT NULL,
   scanned_at    DATETIME     NOT NULL,
+  page_type     VARCHAR(16)  NULL,       -- v002 (T15): check 5 classification, valid for `version`
   INDEX idx_pages_space (space_id)
 );
 

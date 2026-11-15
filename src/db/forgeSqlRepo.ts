@@ -4,7 +4,7 @@
  * Verify against the package README on first deploy — this file is the one most likely to need edits.
  */
 import sql, { migrationRunner } from "@forge/sql";
-import type { Finding } from "../checks/types";
+import type { Finding, PageType } from "../checks/types";
 import type { Repo, ScannedPage, ScanRun } from "./repo";
 
 const SCHEMA = [
@@ -20,6 +20,8 @@ const SCHEMA = [
     "v001_scan_runs",
     `CREATE TABLE IF NOT EXISTS scan_runs (id VARCHAR(64) NOT NULL PRIMARY KEY, space_id VARCHAR(32) NOT NULL, started_at DATETIME NOT NULL, finished_at DATETIME NULL, pages_seen INT NOT NULL DEFAULT 0, pages_scanned INT NOT NULL DEFAULT 0)`,
   ],
+  // T15: cached page type for check 5. A migration runs once per name, so v001 stays untouched.
+  ["v002_pages_page_type", `ALTER TABLE pages ADD COLUMN page_type VARCHAR(16) NULL`],
 ] as const;
 
 export async function migrate(): Promise<void> {
@@ -38,15 +40,31 @@ export class ForgeSqlRepo implements Repo {
     return new Map(rows.rows.map((r) => [r.page_id, r.version]));
   }
 
+  async getPage(pageId: string) {
+    const rows = await sql
+      .prepare<{
+        page_id: string; space_id: string; title: string; version: number; owner_id: string | null;
+        last_modified: string; scanned_at: string; page_type: string | null;
+      }>("SELECT page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type FROM pages WHERE page_id = ?")
+      .bindParams(pageId)
+      .execute();
+    const r = rows.rows[0];
+    if (!r) return undefined;
+    return {
+      pageId: r.page_id, spaceId: r.space_id, title: r.title, version: r.version, ownerId: r.owner_id ?? undefined,
+      lastModified: r.last_modified, scannedAt: r.scanned_at, pageType: (r.page_type as PageType | null) ?? undefined,
+    };
+  }
+
   async upsertPage(p: ScannedPage) {
     await sql
       .prepare(
-        `INSERT INTO pages (page_id, space_id, title, version, owner_id, last_modified, scanned_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO pages (page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE title = VALUES(title), version = VALUES(version), owner_id = VALUES(owner_id),
-           last_modified = VALUES(last_modified), scanned_at = VALUES(scanned_at)`,
+           last_modified = VALUES(last_modified), scanned_at = VALUES(scanned_at), page_type = VALUES(page_type)`,
       )
-      .bindParams(p.pageId, p.spaceId, p.title, p.version, p.ownerId ?? null, dt(p.lastModified), dt(p.scannedAt))
+      .bindParams(p.pageId, p.spaceId, p.title, p.version, p.ownerId ?? null, dt(p.lastModified), dt(p.scannedAt), p.pageType ?? null)
       .execute();
   }
 

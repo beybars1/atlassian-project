@@ -61,6 +61,10 @@ export interface PageAnchors {
   hasIncludes: boolean;
 }
 
+/** Page types check 5 (STALE_BY_TYPE) distinguishes; `other` is never flagged. */
+export const PAGE_TYPES = ["runbook", "how-to", "onboarding", "decision", "meeting-notes", "other"] as const;
+export type PageType = (typeof PAGE_TYPES)[number];
+
 export interface PageRecord {
   id: string;
   spaceId: string;
@@ -80,6 +84,11 @@ export interface PageRecord {
   attachments: AttachmentRef[];
   /** Same-page anchor targets and definitions (T12). */
   anchors: PageAnchors;
+  /**
+   * Page type for check 5 (T15). Set by the worker from labels / title / Haiku, cached per
+   * `pageId:version`. Absent when it could not be determined — the stale check then stays silent.
+   */
+  pageType?: PageType;
 }
 
 export interface IssueInfo {

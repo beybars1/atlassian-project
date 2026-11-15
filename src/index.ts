@@ -3,13 +3,20 @@
  */
 import Resolver from "@forge/resolver";
 import { kvs } from "@forge/kvs";
+import { chat, list } from "@forge/llm";
 import { forgeClients } from "./forge/clients";
 import { ForgeSqlRepo, migrate } from "./db/forgeSqlRepo";
+import { forgeLlmClient } from "./llm/client";
+import { parseStaleThresholds } from "./checks/staleByType";
 import { runNightly, type SpaceConfig } from "./triggers/nightly";
 import { scanBatch as scanBatchImpl } from "./workers/scanBatch";
 import type { ScanBatchEvent } from "./scan/orchestrate";
 
 const repo = new ForgeSqlRepo();
+const llm = forgeLlmClient({ chat, list, log: (line) => console.log(line) });
+
+/** Check 5 thresholds: admin values from KVS merged over the code defaults. */
+const staleThresholds = async () => parseStaleThresholds(await kvs.get("config.staleDays"));
 
 export async function nightly() {
   await migrate();
@@ -21,7 +28,10 @@ export async function nightly() {
 const consumer = new Resolver();
 consumer.define("scan", async ({ payload }) => {
   await migrate();
-  const scanned = await scanBatchImpl(payload as ScanBatchEvent, repo, forgeClients());
+  const scanned = await scanBatchImpl(payload as ScanBatchEvent, repo, forgeClients(), {
+    llm,
+    staleThresholds: await staleThresholds(),
+  });
   return { scanned };
 });
 export const scanBatch = consumer.getDefinitions();
@@ -32,6 +42,12 @@ ui.define("getSpaces", async () => ((await kvs.get("config.spaces")) as SpaceCon
 ui.define("setSpaces", async ({ payload }) => {
   await kvs.set("config.spaces", (payload as { spaces: SpaceConfig[] }).spaces);
   return { ok: true };
+});
+ui.define("getStaleDays", async () => staleThresholds());
+ui.define("setStaleDays", async ({ payload }) => {
+  const parsed = parseStaleThresholds((payload as { staleDays: unknown }).staleDays);
+  await kvs.set("config.staleDays", parsed);
+  return parsed;
 });
 ui.define("topFindings", async ({ payload }) => {
   await migrate();
