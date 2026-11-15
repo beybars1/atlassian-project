@@ -44,6 +44,10 @@ Rules:
 - Prefer fewer, precise facts over many vague ones. Zero facts is a valid answer.`;
 
 export const MAX_PAGE_CHARS = 24_000; // ≈6k tokens; longer pages are truncated for v0 (chunking is T16 follow-up)
+/** Pages shorter than this state nothing worth comparing; they get an empty fact list without a call. */
+export const MIN_EXTRACT_CHARS = 200;
+/** Hard cap per page: bounds storage and the number of keys looked up per scan. */
+export const MAX_FACTS_PER_PAGE = 40;
 
 export async function extractFacts(llm: LlmClient, page: { id: string; title: string; text: string }) {
   const body = page.text.length > MAX_PAGE_CHARS ? page.text.slice(0, MAX_PAGE_CHARS) + "\n[truncated]" : page.text;
@@ -53,7 +57,7 @@ export async function extractFacts(llm: LlmClient, page: { id: string; title: st
     user: `Page title: ${page.title}\n\nPage text:\n${body}`,
     tool: FACT_TOOL,
   });
-  const facts = (res.value.facts ?? []).filter(isValidFact).map(normalize);
+  const facts = (Array.isArray(res.value?.facts) ? res.value.facts : []).filter(isValidFact).map(normalize).slice(0, MAX_FACTS_PER_PAGE);
   return { facts, usage: res.usage, model: res.model };
 }
 
@@ -77,7 +81,7 @@ export function findConflicts(
   }
   const out: ReturnType<typeof findConflicts> = [];
   for (const group of byKey.values()) {
-    const values = new Set(group.map((g) => canon(g.value)));
+    const values = new Set(group.map((g) => canonValue(g.value)));
     const pages = new Set(group.map((g) => g.pageId));
     if (values.size < 2 || pages.size < 2) continue;
     out.push({
@@ -89,6 +93,7 @@ export function findConflicts(
   return out;
 }
 
-function canon(v: string): string {
+/** Value comparison form: two claims with the same canonical value agree. */
+export function canonValue(v: string): string {
   return v.trim().toLowerCase().replace(/[\s.,;:]+$/g, "").replace(/\s+/g, " ");
 }
