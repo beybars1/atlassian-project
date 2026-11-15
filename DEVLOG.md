@@ -4,6 +4,28 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-15 (Sun, night) — T16 check 6 CONTRADICTION
+
+**Done**
+- `src/llm/adjudicate.ts`: Sonnet via a forced `judge_conflict` tool (`outdated_page_id` | "unknown", `confidence`, `reason`). The prompt gets each claim's page id, title, last-edit date and verbatim quote — nothing else — and is told that a newer page is not automatically right and that "unknown" is the answer whenever a careful reader would hesitate. An id that is not one of the listed pages counts as no verdict; an unknown confidence counts as low. Capped at 6 claims and 300 output tokens per call.
+- `src/checks/contradiction.ts`: pure. Takes the scanned page's facts and the stored facts of the other pages for the same `(entity, attribute)` keys, keeps only conflicts that involve the scanned page (the others belong to their own pages' scans), adjudicates at most 10 per page, and emits a `CONTRADICTION` (medium) finding only at high confidence — on the page judged outdated, which may be the *other* page. Evidence quotes both sides with titles and dates plus Sonnet's one-line reason; the suggestion names the current value and its page. Agreeing facts never reach Sonnet.
+- Storage: `facts` table + `pages.facts_version` (migration v003; extraction runs once per page version, an empty list is a cached answer, a failed extraction is not). `findings.source_page_id`: `replaceFindings(pageId, …)` now means "replace everything the scan of this page produced", so a contradiction placed on page B by A's scan is refreshed when A is rescanned and when B is rescanned (B recomputes it against A's cached facts, or clears it if B was fixed). The same finding produced by both sides in one night is stored once.
+- Worker: facts are resolved after the local checks (cached → `factsOfPage`, short page → `[]` without a call, else Haiku, capped at 40 facts per page), then `factsForKeys` for only the keys the page has, then adjudication. Tokens from both models go into the existing per-batch log line. No LLM → check 6 is off; extraction failure → the other checks' findings are stored and facts are retried next time.
+- Fixtures `STORAGE_CONTRADICTION_RUNBOOK` / `_ONBOARDING` (2 planted faults: on-call channel, database port; 2 planted non-faults: owner, region). 14 new tests incl. the worker end-to-end over three "nights" (store → conflict → fix). 94 total green; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Learned**
+- The finding has to be able to land on a page that is not in the batch: in an incremental scan the page that changed is usually the *right* one, and the stale claim sits on a page nobody touched. Tracking the source page of a finding is the smallest change that keeps "replace findings on rescan" correct for both pages.
+- Re-adjudicating on a replayed event costs Sonnet again (facts are cached, verdicts are not). Pages are normally rescanned only on a version change, so this is bounded; caching verdicts by the pair of fact rows is a T16a option if the cost report (T17) says it matters.
+- Jira evidence for the adjudicator needs an issue-to-claim association that extraction does not produce today; shipped dates + quotes only and wrote the rest down as T16a rather than guessing.
+
+**Next**
+- Agent (unblocked): T17 cost report (needs T15, T16 — both done), then T18 dashboard v1, T19b suggested-fix preview.
+- Owner: T06 verification on the dev site still gates T07 / T15a / T16b; T12a scope decision.
+
+**Hours:** ~1.5
+
+---
+
 ## 2026-11-14 (Sat, night) — T15 check 5 STALE_BY_TYPE
 
 **Done**
