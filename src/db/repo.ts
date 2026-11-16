@@ -122,5 +122,12 @@ export class MemoryRepo implements Repo {
 }
 
 export function sameFinding(a: Finding, b: Finding): boolean {
-  return a.pageId === b.pageId && a.check === b.check && a.severity === b.severity && a.evidence === b.evidence && a.suggestion === b.suggestion;
+  return (
+    a.pageId === b.pageId &&
+    a.check === b.check &&
+    a.severity === b.severity &&
+    a.evidence === b.evidence &&
+    a.suggestion === b.suggestion &&
+    a.related?.pageId === b.related?.pageId
+  );
 }

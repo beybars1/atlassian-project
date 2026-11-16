@@ -21,6 +21,11 @@ export interface Finding {
   evidence: string;
   /** What the page owner should do. */
   suggestion: string;
+  /**
+   * The other page involved, when a finding is about two pages (check 6: the page whose value is
+   * current). Shown on the dashboard as "CONTRADICTION vs <title>".
+   */
+  related?: { pageId: string; pageTitle: string };
 }
 
 export interface PageLink {
@@ -99,6 +104,8 @@ export interface IssueInfo {
   /** Jira status category key: "new" | "indeterminate" | "done" */
   statusCategory?: string;
   resolved?: boolean;
+  /** Names of the fix versions, when the issue has any (check 6 evidence, T16a). */
+  fixVersions?: string[];
   /** Set when the issue was moved and the key redirected to another key. */
   movedTo?: string;
 }

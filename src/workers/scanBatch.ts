@@ -42,6 +42,7 @@ export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clie
           pageFacts: facts.facts,
           otherFacts: other,
           adjudicate: (conflict) => adjudicateConflict(llm, conflict),
+          jira: (key) => clients.jira.getIssue(key),
         });
         tokens.input += c.usage.input;
         tokens.output += c.usage.output;
@@ -101,7 +102,7 @@ async function resolvePageType(
  * failed — then `factsVersion` stays unset so the next scan retries) and check 6 is skipped.
  */
 async function resolveFacts(
-  page: { id: string; title: string; text: string; version: number },
+  page: { id: string; title: string; text: string; version: number; issueKeys: string[] },
   prev: ScannedPage | undefined,
   repo: Repo,
   llm: LlmClient | undefined,

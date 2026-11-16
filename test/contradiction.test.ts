@@ -10,7 +10,8 @@ import { fakeClients } from "./fixtures/clients";
 import { STORAGE_CONTRADICTION_ONBOARDING, STORAGE_CONTRADICTION_RUNBOOK } from "./fixtures/pages";
 
 const NOW = "2026-11-15T00:00:00Z";
-const world = fakeClients({ now: NOW });
+// PAY-42 is the issue the runbook cites next to the port change (T16a: Jira evidence for the adjudicator).
+const world = fakeClients({ now: NOW, issues: { "PAY-42": { statusName: "Done", statusCategory: "done", resolved: true, fixVersions: ["2.3"] } } });
 
 const RUNBOOK = { id: "10", title: "Payments service runbook", lastModified: "2026-11-10T00:00:00Z" };
 const ONBOARDING = { id: "11", title: "Payments team onboarding", lastModified: "2026-06-01T00:00:00Z" };
@@ -20,7 +21,7 @@ const RUNBOOK_FACTS: Fact[] = [
   { entity: "payments-service", attribute: "owner", value: "platform team", quote: "Owner: platform team." },
   { entity: "payments-service", attribute: "region", value: "eu-west-1", quote: "Region: eu-west-1." },
   { entity: "payments-service", attribute: "on-call-channel", value: "#payments-oncall", quote: "On-call channel: #payments-oncall." },
-  { entity: "payments-service", attribute: "database-port", value: "5433", quote: "The database listens on port 5433 since the Postgres upgrade." },
+  { entity: "payments-service", attribute: "database-port", value: "5433", quote: "The database listens on port 5433 since the Postgres upgrade" },
 ];
 const ONBOARDING_FACTS: Fact[] = [
   { entity: "payments-service", attribute: "owner", value: "Platform team", quote: "owned by the platform team" },
@@ -265,8 +266,13 @@ describe("scanBatch wiring — check 6", () => {
     await scanBatch({ runId: "r2", spaceId: "100", pageIds: [RUNBOOK.id] }, repo, world, { llm: f.llm });
     expect(f.calls.filter((c) => c.toolName === ADJUDICATE_TOOL.name)).toHaveLength(2);
     expect(f.calls.filter((c) => c.toolName === ADJUDICATE_TOOL.name).every((c) => c.tier === "smart")).toBe(true);
+    // T16a: the key cited next to the port claim reaches the adjudicator with its Jira state, and the finding names the other page.
+    const portCall = f.calls.find((c) => c.toolName === ADJUDICATE_TOOL.name && c.user.includes("database-port"))!;
+    expect(portCall.user).toContain('PAY-42 — status "Done" (resolved; fix version 2.3)');
+    expect(repo.facts.get(RUNBOOK.id)?.find((x) => x.attribute === "database-port")?.issueKeys).toEqual(["PAY-42"]);
     const onOnboarding = repo.findings.get(ONBOARDING.id)?.filter((x) => x.check === "CONTRADICTION") ?? [];
     expect(onOnboarding).toHaveLength(2);
+    expect(onOnboarding.every((x) => x.related?.pageId === RUNBOOK.id && x.related.pageTitle === RUNBOOK.title)).toBe(true);
     expect(repo.findings.get(RUNBOOK.id)?.filter((x) => x.check === "CONTRADICTION") ?? []).toEqual([]);
 
     // Replay of the same event (double-fired trigger): facts cached, conflicts re-adjudicated, nothing duplicated.

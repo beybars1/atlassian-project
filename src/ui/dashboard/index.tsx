@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from "react";
 import ForgeReconciler, { Text, Button, Heading, Stack, Inline, Label, Textfield, DynamicTable, Lozenge } from "@forge/react";
 import { invoke as forgeInvoke } from "@forge/bridge";
+import { findingLabel } from "../findingLabel";
 
 /** invoke() may wrap the result in { body }; unwrap once here. */
 async function invoke<T>(fn: string, payload?: Record<string, unknown>): Promise<T> {
@@ -24,7 +25,7 @@ const STALE_TYPES: Array<[key: string, label: string]> = [
 ];
 type Row = {
   page: { pageId: string; title: string; lastModified: string };
-  findings: Array<{ check: string; severity: "high" | "medium" | "low"; evidence: string }>;
+  findings: Array<{ check: string; severity: "high" | "medium" | "low"; evidence: string; related?: { pageId: string; pageTitle: string } }>;
 };
 
 const App = () => {
@@ -102,7 +103,7 @@ const App = () => {
                 </Lozenge>
               ),
             },
-            { content: r.findings.map((f) => `${f.check}: ${f.evidence}`).join(" | ") },
+            { content: r.findings.map((f) => `${findingLabel(f)}: ${f.evidence}`).join(" | ") },
           ],
         }))}
         emptyView={<Text>No findings yet. Save a space and run a scan.</Text>}

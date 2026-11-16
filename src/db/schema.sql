@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS findings (
   status      VARCHAR(16)  NOT NULL DEFAULT 'open',
   created_at  DATETIME     NOT NULL,
   source_page_id VARCHAR(32) NULL,       -- v003 (T16): page whose scan produced the finding (check 6 may target another page)
+  related_page_id    VARCHAR(32)  NULL,  -- v004 (T16a): the other page of a two-page finding (check 6: the page with the current value)
+  related_page_title VARCHAR(512) NULL,  -- v004 (T16a): its title at the time, for the dashboard label
   INDEX idx_findings_page (page_id),
   INDEX idx_findings_status (status),
   INDEX idx_findings_source (source_page_id)
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS facts (
   attribute    VARCHAR(255) NOT NULL,
   value        TEXT         NOT NULL,
   quote        TEXT         NOT NULL,
+  issue_keys   VARCHAR(255) NULL,        -- v004 (T16a): Jira keys cited next to the claim, comma-separated
   extracted_at DATETIME     NOT NULL,
   INDEX idx_facts_page (page_id),
   INDEX idx_facts_key (entity, attribute)
