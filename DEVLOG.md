@@ -4,6 +4,27 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-16 (Mon, night) — T16a check 6 follow-ups
+
+**Done**
+- Jira evidence for the adjudicator. `extractFacts` now records, per fact, the issue keys written next to the claim (`issueKeysNear`: keys in the quote, or within 120 chars of where the quote sits in the page text; only keys the storage parser already found on the page, so "ISO-9001" never qualifies; max 3). Stored in `facts.issue_keys` (migration `v004_facts_issue_keys`, comma-separated), so the *other* page's claims carry their keys too when they come back from the repo. `contradictionFindings` takes an optional `jira(key)` lookup (the worker passes `clients.jira.getIssue`, cached per batch), attaches `{status, resolved, fixVersions}` per claim, and the Sonnet prompt gets one `jira:` line per claim that cites something plus a rule on how to read it (resolved → the change happened; open → may be a plan; not found → proves nothing). A failing lookup means no evidence, never wrong evidence. The Jira client now requests `fixVersions` (`IssueInfo.fixVersions`); same scope.
+- Chunking. Pages over `MAX_PAGE_CHARS` (24k) are split at blank lines (`chunkText`; an oversized paragraph is hard-split) and read in up to `MAX_CHUNKS_PER_PAGE` (4) Haiku calls, each titled "part i of n"; facts are merged and deduped by `(entity, attribute, canonValue)`, extraction stops once `MAX_FACTS_PER_PAGE` is full, usage is summed. Anything past 96k chars is skipped with a warning — that is a document dump, not a wiki page.
+- Related page on the finding. `Finding.related = {pageId, pageTitle}` (check 6: the page with the current value), stored in `findings.related_page_id/title` (migration `v004_findings_related`), part of the duplicate test, returned by `openFindings`. `src/ui/findingLabel.ts` (pure, tested) renders `CONTRADICTION vs “<title>”`; the dashboard uses it. The finding's evidence also lists the cited issues ("Jira: PAY-42 — status "Done" (resolved; fix version 2.3)").
+- Fixture: the runbook now cites `PAY-42` next to the port change; the worker end-to-end test asserts the key reaches Sonnet with its Jira state and that both findings name the runbook. 15 new tests; 109 total green; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Learned**
+- Proximity is the only claim↔issue association available without a second LLM call, and it is good enough because it is conservative: a key 120 chars from the quote is almost always about that sentence, and a missing association only means the adjudicator sees dates + quotes as before.
+- Haiku's quotes are not always verbatim to the character (trailing period, smart quotes); when `indexOf` misses, the window falls back to the quote itself, so a key inside the quote still counts. Worth checking on real pages in T16b.
+- The dashboard resource is a single file but Forge bundles relative imports, so a pure helper next to it keeps the label testable without pulling `@forge/react` into vitest.
+
+**Next**
+- Agent (unblocked): T17 cost report (needs T15, T16), then T18 dashboard v1, T19b suggested-fix preview.
+- Owner: T06 verification on the dev site still gates T07 / T15a / T16b (migration v004 should be checked there too); T12a scope decision.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-15 (Sun, night) — T16 check 6 CONTRADICTION
 
 **Done**
