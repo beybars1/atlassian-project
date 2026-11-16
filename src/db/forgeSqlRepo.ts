@@ -5,6 +5,8 @@
  */
 import sql, { migrationRunner } from "@forge/sql";
 import type { Finding, PageType } from "../checks/types";
+import type { StoredFact } from "../checks/contradiction";
+import type { Fact } from "../llm/extractFacts";
 import type { Repo, ScannedPage, ScanRun } from "./repo";
 
 const SCHEMA = [
@@ -22,6 +24,14 @@ const SCHEMA = [
   ],
   // T15: cached page type for check 5. A migration runs once per name, so v001 stays untouched.
   ["v002_pages_page_type", `ALTER TABLE pages ADD COLUMN page_type VARCHAR(16) NULL`],
+  // T16: check 6. Facts per page version; findings remember which page's scan produced them so a
+  // contradiction placed on another page is refreshed when its source is rescanned.
+  ["v003_pages_facts_version", `ALTER TABLE pages ADD COLUMN facts_version INT NULL`],
+  ["v003_findings_source", `ALTER TABLE findings ADD COLUMN source_page_id VARCHAR(32) NULL, ADD INDEX idx_findings_source (source_page_id)`],
+  [
+    "v003_facts",
+    `CREATE TABLE IF NOT EXISTS facts (id BIGINT AUTO_INCREMENT PRIMARY KEY, page_id VARCHAR(32) NOT NULL, entity VARCHAR(255) NOT NULL, attribute VARCHAR(255) NOT NULL, value TEXT NOT NULL, quote TEXT NOT NULL, extracted_at DATETIME NOT NULL, INDEX idx_facts_page (page_id), INDEX idx_facts_key (entity, attribute))`,
+  ],
 ] as const;
 
 export async function migrate(): Promise<void> {
@@ -44,8 +54,8 @@ export class ForgeSqlRepo implements Repo {
     const rows = await sql
       .prepare<{
         page_id: string; space_id: string; title: string; version: number; owner_id: string | null;
-        last_modified: string; scanned_at: string; page_type: string | null;
-      }>("SELECT page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type FROM pages WHERE page_id = ?")
+        last_modified: string; scanned_at: string; page_type: string | null; facts_version: number | null;
+      }>("SELECT page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type, facts_version FROM pages WHERE page_id = ?")
       .bindParams(pageId)
       .execute();
     const r = rows.rows[0];
@@ -53,32 +63,83 @@ export class ForgeSqlRepo implements Repo {
     return {
       pageId: r.page_id, spaceId: r.space_id, title: r.title, version: r.version, ownerId: r.owner_id ?? undefined,
       lastModified: r.last_modified, scannedAt: r.scanned_at, pageType: (r.page_type as PageType | null) ?? undefined,
+      factsVersion: r.facts_version ?? undefined,
     };
   }
 
   async upsertPage(p: ScannedPage) {
     await sql
       .prepare(
-        `INSERT INTO pages (page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO pages (page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type, facts_version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE title = VALUES(title), version = VALUES(version), owner_id = VALUES(owner_id),
-           last_modified = VALUES(last_modified), scanned_at = VALUES(scanned_at), page_type = VALUES(page_type)`,
+           last_modified = VALUES(last_modified), scanned_at = VALUES(scanned_at), page_type = VALUES(page_type),
+           facts_version = VALUES(facts_version)`,
       )
-      .bindParams(p.pageId, p.spaceId, p.title, p.version, p.ownerId ?? null, dt(p.lastModified), dt(p.scannedAt), p.pageType ?? null)
+      .bindParams(p.pageId, p.spaceId, p.title, p.version, p.ownerId ?? null, dt(p.lastModified), dt(p.scannedAt), p.pageType ?? null, p.factsVersion ?? null)
       .execute();
   }
 
   async replaceFindings(pageId: string, findings: Finding[]) {
-    await sql.prepare("DELETE FROM findings WHERE page_id = ? AND status = 'open'").bindParams(pageId).execute();
+    await sql
+      .prepare("DELETE FROM findings WHERE status = 'open' AND (page_id = ? OR source_page_id = ?)")
+      .bindParams(pageId, pageId)
+      .execute();
     const now = dt(new Date().toISOString());
     for (const f of findings) {
+      // Same finding already open on its page (e.g. both sides of a contradiction scanned tonight) → keep one.
+      const dup = await sql
+        .prepare<{ id: number }>(
+          "SELECT id FROM findings WHERE page_id = ? AND check_code = ? AND severity = ? AND evidence = ? AND suggestion = ? AND status = 'open' LIMIT 1",
+        )
+        .bindParams(f.pageId, f.check, f.severity, f.evidence, f.suggestion)
+        .execute();
+      if (dup.rows.length > 0) continue;
       await sql
         .prepare(
-          "INSERT INTO findings (page_id, check_code, severity, evidence, suggestion, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
+          "INSERT INTO findings (page_id, source_page_id, check_code, severity, evidence, suggestion, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?)",
         )
-        .bindParams(pageId, f.check, f.severity, f.evidence, f.suggestion, now)
+        .bindParams(f.pageId, pageId, f.check, f.severity, f.evidence, f.suggestion, now)
         .execute();
     }
+  }
+
+  async replaceFacts(pageId: string, facts: Fact[]) {
+    await sql.prepare("DELETE FROM facts WHERE page_id = ?").bindParams(pageId).execute();
+    const now = dt(new Date().toISOString());
+    for (const f of facts) {
+      await sql
+        .prepare("INSERT INTO facts (page_id, entity, attribute, value, quote, extracted_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bindParams(pageId, f.entity.slice(0, 255), f.attribute.slice(0, 255), f.value, f.quote, now)
+        .execute();
+    }
+  }
+
+  async factsOfPage(pageId: string) {
+    const rows = await sql
+      .prepare<{ entity: string; attribute: string; value: string; quote: string }>("SELECT entity, attribute, value, quote FROM facts WHERE page_id = ?")
+      .bindParams(pageId)
+      .execute();
+    return rows.rows.map((r): Fact => ({ entity: r.entity, attribute: r.attribute, value: r.value, quote: r.quote }));
+  }
+
+  async factsForKeys(spaceId: string, keys: Array<{ entity: string; attribute: string }>) {
+    if (keys.length === 0) return [];
+    const placeholders = keys.map(() => "(f.entity = ? AND f.attribute = ?)").join(" OR ");
+    const rows = await sql
+      .prepare<{ page_id: string; title: string; last_modified: string; entity: string; attribute: string; value: string; quote: string }>(
+        `SELECT f.page_id, p.title, p.last_modified, f.entity, f.attribute, f.value, f.quote
+         FROM facts f JOIN pages p ON p.page_id = f.page_id
+         WHERE p.space_id = ? AND (${placeholders})`,
+      )
+      .bindParams(spaceId, ...keys.flatMap((k) => [k.entity, k.attribute]))
+      .execute();
+    return rows.rows.map(
+      (r): StoredFact => ({
+        pageId: r.page_id, pageTitle: r.title, pageLastModified: r.last_modified,
+        entity: r.entity, attribute: r.attribute, value: r.value, quote: r.quote,
+      }),
+    );
   }
 
   async openFindings(spaceId: string, limit: number) {

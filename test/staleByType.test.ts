@@ -25,11 +25,15 @@ function page(extra: Partial<PageRecord> = {}): PageRecord {
   };
 }
 
-/** LLM fake that answers the classify tool with a scripted result and counts calls. */
+/**
+ * LLM fake that answers the classify tool with a scripted result and counts calls. The worker also
+ * asks for facts (check 6, T16); those calls get an empty fact list and are excluded from `calls`.
+ */
 function fakeLlm(answer: { type: string; confidence: string }, usage = { input: 900, output: 20 }) {
   const calls: Array<{ tier: string; user: string; toolName: string }> = [];
   const llm: LlmClient = {
     async callTool<T>(args: { tier: string; user: string; tool: { name: string } }) {
+      if (args.tool.name !== CLASSIFY_TOOL.name) return { value: { facts: [] } as unknown as T, usage: { input: 0, output: 0 }, model: "claude-haiku-4-5" };
       calls.push({ tier: args.tier, user: args.user, toolName: args.tool.name });
       return { value: answer as unknown as T, usage, model: "claude-haiku-4-5" };
     },

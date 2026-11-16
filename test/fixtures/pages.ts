@@ -113,3 +113,27 @@ export const STORAGE_STALE_RUNBOOK = `
 <h2>Escalation</h2>
 <p>Page the platform lead if recovery takes longer than 30 minutes.</p>
 `;
+
+/**
+ * T16 — check 6 CONTRADICTION, planted fault: two pages in the same space disagree about the
+ * on-call channel and the database port of the payments service. The runbook (edited later) says
+ * #payments-oncall / 5433; the older onboarding page still says #payments-alerts / 5432.
+ * Planted non-faults: both pages agree on the owner (platform team) and the region (eu-west-1).
+ * Fact extraction is a Haiku call, so in tests the facts are scripted; the bodies exist so the
+ * seed script (T07) can plant the fault on a real site.
+ */
+export const STORAGE_CONTRADICTION_RUNBOOK = `
+<h1>Payments service runbook</h1>
+<p>Owner: platform team. Region: eu-west-1.</p>
+<p>On-call channel: #payments-oncall. The database listens on port 5433 since the Postgres upgrade.</p>
+<h2>Recovery</h2>
+<p>Scale the consumer group to 6 and re-run reconciliation for the affected day.</p>
+`;
+
+export const STORAGE_CONTRADICTION_ONBOARDING = `
+<h1>Payments team onboarding</h1>
+<p>Welcome! The payments service is owned by the platform team and runs in eu-west-1.</p>
+<p>If something breaks, post in #payments-alerts. The database is reachable on port 5432.</p>
+<h2>First week</h2>
+<p>Read the runbook, get access to the dashboards, and shadow one on-call shift.</p>
+`;

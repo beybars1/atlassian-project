@@ -9,7 +9,9 @@ import { placeholders } from "./placeholders";
 
 /**
  * v0 checks that need nothing beyond the page and the clients, in the order they run.
- * Check 5 (`staleByType`) is appended by the worker with the admin thresholds; check 6 (T16) follows.
+ * Check 5 (`staleByType`) is appended by the worker with the admin thresholds. Check 6
+ * (`contradiction.ts`) is not a `Check`: it needs stored facts and an adjudicator, so the worker
+ * runs it after these and merges its findings.
  */
 export const V0_CHECKS: Check[] = [
   deadLinks,
