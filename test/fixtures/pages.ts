@@ -119,13 +119,14 @@ export const STORAGE_STALE_RUNBOOK = `
  * on-call channel and the database port of the payments service. The runbook (edited later) says
  * #payments-oncall / 5433; the older onboarding page still says #payments-alerts / 5432.
  * Planted non-faults: both pages agree on the owner (platform team) and the region (eu-west-1).
+ * T16a: the port change on the runbook cites PAY-42 — Jira evidence the adjudicator receives.
  * Fact extraction is a Haiku call, so in tests the facts are scripted; the bodies exist so the
  * seed script (T07) can plant the fault on a real site.
  */
 export const STORAGE_CONTRADICTION_RUNBOOK = `
 <h1>Payments service runbook</h1>
 <p>Owner: platform team. Region: eu-west-1.</p>
-<p>On-call channel: #payments-oncall. The database listens on port 5433 since the Postgres upgrade.</p>
+<p>On-call channel: #payments-oncall. The database listens on port 5433 since the Postgres upgrade (PAY-42).</p>
 <h2>Recovery</h2>
 <p>Scale the consumer group to 6 and re-run reconciliation for the affected day.</p>
 `;

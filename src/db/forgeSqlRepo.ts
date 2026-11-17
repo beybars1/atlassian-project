@@ -32,11 +32,25 @@ const SCHEMA = [
     "v003_facts",
     `CREATE TABLE IF NOT EXISTS facts (id BIGINT AUTO_INCREMENT PRIMARY KEY, page_id VARCHAR(32) NOT NULL, entity VARCHAR(255) NOT NULL, attribute VARCHAR(255) NOT NULL, value TEXT NOT NULL, quote TEXT NOT NULL, extracted_at DATETIME NOT NULL, INDEX idx_facts_page (page_id), INDEX idx_facts_key (entity, attribute))`,
   ],
+  // T16a: issue keys cited next to a fact (Jira evidence for adjudication) and the other page of a
+  // two-page finding (dashboard label "CONTRADICTION vs <title>").
+  ["v004_facts_issue_keys", `ALTER TABLE facts ADD COLUMN issue_keys VARCHAR(255) NULL`],
+  ["v004_findings_related", `ALTER TABLE findings ADD COLUMN related_page_id VARCHAR(32) NULL, ADD COLUMN related_page_title VARCHAR(512) NULL`],
 ] as const;
+
+/** `issue_keys` column ↔ `Fact.issueKeys` (comma-separated; keys never contain commas). */
+const packKeys = (keys?: string[]) => (keys?.length ? keys.join(",").slice(0, 255) : null);
+const unpackKeys = (col: string | null): string[] | undefined => (col ? col.split(",").filter(Boolean) : undefined);
+const related = (id: string | null, title: string | null): Finding["related"] => (id ? { pageId: id, pageTitle: title ?? "" } : undefined);
 
 export async function migrate(): Promise<void> {
   for (const [name, ddl] of SCHEMA) migrationRunner.enqueue(name, ddl);
   await migrationRunner.run();
+}
+
+function withKeys<T extends Fact>(f: T, col: string | null): T {
+  const keys = unpackKeys(col);
+  return keys ? { ...f, issueKeys: keys } : f;
 }
 
 const dt = (iso: string) => iso.replace("T", " ").replace(/\.\d+Z$/, "").replace("Z", "");
@@ -90,16 +104,16 @@ export class ForgeSqlRepo implements Repo {
       // Same finding already open on its page (e.g. both sides of a contradiction scanned tonight) → keep one.
       const dup = await sql
         .prepare<{ id: number }>(
-          "SELECT id FROM findings WHERE page_id = ? AND check_code = ? AND severity = ? AND evidence = ? AND suggestion = ? AND status = 'open' LIMIT 1",
+          "SELECT id FROM findings WHERE page_id = ? AND check_code = ? AND severity = ? AND evidence = ? AND suggestion = ? AND (related_page_id <=> ?) AND status = 'open' LIMIT 1",
         )
-        .bindParams(f.pageId, f.check, f.severity, f.evidence, f.suggestion)
+        .bindParams(f.pageId, f.check, f.severity, f.evidence, f.suggestion, f.related?.pageId ?? null)
         .execute();
       if (dup.rows.length > 0) continue;
       await sql
         .prepare(
-          "INSERT INTO findings (page_id, source_page_id, check_code, severity, evidence, suggestion, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?)",
+          "INSERT INTO findings (page_id, source_page_id, check_code, severity, evidence, suggestion, related_page_id, related_page_title, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)",
         )
-        .bindParams(f.pageId, pageId, f.check, f.severity, f.evidence, f.suggestion, now)
+        .bindParams(f.pageId, pageId, f.check, f.severity, f.evidence, f.suggestion, f.related?.pageId ?? null, f.related?.pageTitle.slice(0, 512) ?? null, now)
         .execute();
     }
   }
@@ -109,36 +123,39 @@ export class ForgeSqlRepo implements Repo {
     const now = dt(new Date().toISOString());
     for (const f of facts) {
       await sql
-        .prepare("INSERT INTO facts (page_id, entity, attribute, value, quote, extracted_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .bindParams(pageId, f.entity.slice(0, 255), f.attribute.slice(0, 255), f.value, f.quote, now)
+        .prepare("INSERT INTO facts (page_id, entity, attribute, value, quote, issue_keys, extracted_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bindParams(pageId, f.entity.slice(0, 255), f.attribute.slice(0, 255), f.value, f.quote, packKeys(f.issueKeys), now)
         .execute();
     }
   }
 
   async factsOfPage(pageId: string) {
     const rows = await sql
-      .prepare<{ entity: string; attribute: string; value: string; quote: string }>("SELECT entity, attribute, value, quote FROM facts WHERE page_id = ?")
+      .prepare<{ entity: string; attribute: string; value: string; quote: string; issue_keys: string | null }>(
+        "SELECT entity, attribute, value, quote, issue_keys FROM facts WHERE page_id = ?",
+      )
       .bindParams(pageId)
       .execute();
-    return rows.rows.map((r): Fact => ({ entity: r.entity, attribute: r.attribute, value: r.value, quote: r.quote }));
+    return rows.rows.map((r): Fact => withKeys({ entity: r.entity, attribute: r.attribute, value: r.value, quote: r.quote }, r.issue_keys));
   }
 
   async factsForKeys(spaceId: string, keys: Array<{ entity: string; attribute: string }>) {
     if (keys.length === 0) return [];
     const placeholders = keys.map(() => "(f.entity = ? AND f.attribute = ?)").join(" OR ");
     const rows = await sql
-      .prepare<{ page_id: string; title: string; last_modified: string; entity: string; attribute: string; value: string; quote: string }>(
-        `SELECT f.page_id, p.title, p.last_modified, f.entity, f.attribute, f.value, f.quote
+      .prepare<{ page_id: string; title: string; last_modified: string; entity: string; attribute: string; value: string; quote: string; issue_keys: string | null }>(
+        `SELECT f.page_id, p.title, p.last_modified, f.entity, f.attribute, f.value, f.quote, f.issue_keys
          FROM facts f JOIN pages p ON p.page_id = f.page_id
          WHERE p.space_id = ? AND (${placeholders})`,
       )
       .bindParams(spaceId, ...keys.flatMap((k) => [k.entity, k.attribute]))
       .execute();
     return rows.rows.map(
-      (r): StoredFact => ({
-        pageId: r.page_id, pageTitle: r.title, pageLastModified: r.last_modified,
-        entity: r.entity, attribute: r.attribute, value: r.value, quote: r.quote,
-      }),
+      (r): StoredFact =>
+        withKeys(
+          { pageId: r.page_id, pageTitle: r.title, pageLastModified: r.last_modified, entity: r.entity, attribute: r.attribute, value: r.value, quote: r.quote },
+          r.issue_keys,
+        ),
     );
   }
 
@@ -147,9 +164,10 @@ export class ForgeSqlRepo implements Repo {
       .prepare<{
         page_id: string; space_id: string; title: string; version: number; owner_id: string | null;
         last_modified: string; scanned_at: string; check_code: string; severity: string; evidence: string; suggestion: string;
+        related_page_id: string | null; related_page_title: string | null;
       }>(
         `SELECT p.page_id, p.space_id, p.title, p.version, p.owner_id, p.last_modified, p.scanned_at,
-                f.check_code, f.severity, f.evidence, f.suggestion
+                f.check_code, f.severity, f.evidence, f.suggestion, f.related_page_id, f.related_page_title
          FROM findings f JOIN pages p ON p.page_id = f.page_id
          WHERE p.space_id = ? AND f.status = 'open'`,
       )
@@ -166,7 +184,8 @@ export class ForgeSqlRepo implements Repo {
         score: 0,
       };
       const sev = r.severity as Finding["severity"];
-      e.findings.push({ pageId: r.page_id, check: r.check_code as Finding["check"], severity: sev, evidence: r.evidence, suggestion: r.suggestion });
+      const rel = related(r.related_page_id, r.related_page_title);
+      e.findings.push({ pageId: r.page_id, check: r.check_code as Finding["check"], severity: sev, evidence: r.evidence, suggestion: r.suggestion, ...(rel ? { related: rel } : {}) });
       e.score += { high: 3, medium: 2, low: 1 }[sev];
       byPage.set(r.page_id, e);
     }

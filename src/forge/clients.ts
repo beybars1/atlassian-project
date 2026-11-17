@@ -76,7 +76,7 @@ export function forgeClients(): Clients {
       async getIssue(key) {
         const hit = cache.issues.get(key);
         if (hit) return hit;
-        const res = await jiraGet(route`/rest/api/3/issue/${key}?fields=summary,status,resolution`);
+        const res = await jiraGet(route`/rest/api/3/issue/${key}?fields=summary,status,resolution,fixVersions`);
         let info: IssueInfo;
         if (res.status === 404) {
           info = { key, exists: false };
@@ -85,7 +85,12 @@ export function forgeClients(): Clients {
         } else {
           const body = (await res.json()) as {
             key: string;
-            fields: { summary?: string; status?: { name?: string; statusCategory?: { key?: string } }; resolution?: unknown };
+            fields: {
+              summary?: string;
+              status?: { name?: string; statusCategory?: { key?: string } };
+              resolution?: unknown;
+              fixVersions?: Array<{ name?: string }>;
+            };
           };
           info = {
             key,
@@ -94,6 +99,7 @@ export function forgeClients(): Clients {
             statusName: body.fields.status?.name,
             statusCategory: body.fields.status?.statusCategory?.key,
             resolved: !!body.fields.resolution,
+            fixVersions: (body.fields.fixVersions ?? []).map((v) => v.name).filter((n): n is string => !!n),
             movedTo: body.key !== key ? body.key : undefined,
           };
         }
