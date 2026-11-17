@@ -4,6 +4,31 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-17 (Tue, night) — T17 cost report
+
+**Done**
+- `src/llm/cost.ts` (pure): `LlmUsage` keeps Haiku and Sonnet tokens apart (a Sonnet token costs 3× a Haiku one, so one total would hide which check drives the bill); `usageCostUsd` prices them at the list rates already in `client.ts`, at read time, so a price change is a one-line edit and not a migration. `projectedCostUsd` scales a run's rate to 2,000 pages; `costAlert` fires only when a run's *actual* cost passes $10, and only on the batch that crossed the line.
+- Run accounting. `scan_runs` gets `fast_in/out`, `smart_in/out` (migration `v005_scan_runs_tokens`, plus an index on `(space_id, started_at)`); `Repo.finishRun` is replaced by `recordBatch`, which *adds* a batch's pages and tokens in SQL (`SET x = x + ?`) — batches of one run finish in any order, possibly concurrently. This also fixes a latent bug: `pages_scanned` was overwritten by whichever batch finished last, so the run row of a 10-batch night said "50 pages". `Repo.recentRuns(spaceId, limit)` lists runs newest first.
+- Worker: tokens are attributed per call site (classification and extraction → fast, adjudication → smart), logged per batch with the $ estimate, recorded on the run, and the worker `console.warn`s `cost alert: …` once per run over budget.
+- Dashboard: "Scan cost" table (last 10 runs: date, pages scanned of seen, Haiku tokens, Sonnet tokens, cost, per 2,000 pages; cost in a red lozenge when over $10). Rows come from `src/ui/costReport.ts`, pure and tested, so the UI Kit page only renders strings.
+- 10 new tests (arithmetic, alert semantics, report rows, memory repo accumulation, worker end-to-end over two batches with both models, alert-once). 119 total green; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Cost watch (the DEVLOG alert T17 asks for)**
+- No real scan has run yet (T06/T07 are owner-gated), so there is no measured figure. The PLAN §5 estimate (3M in / 0.3M out Haiku + ~50 Sonnet verdicts ≈ $5.10 per 2,000 pages) is the expectation; the dashboard column "Per 2,000 pages" is where the measured number will appear after the first seeded scan. Writing it here is T17a.
+
+**Learned**
+- `finished_at` on a run can only mean "last batch activity": the consumer does not know which batch is the last one. Good enough for a cost table; a real "run complete" needs a batch counter from the trigger, which T09 (incremental scan proof) will want anyway.
+- A per-page projection must not be an alert. A 10-page incremental night that hits a few long pages projects to $60 per 2,000 and would cry wolf every week; the alert is on money actually spent.
+- `startRun` is a plain INSERT on a primary key `<date>:<space>`: a second start the same day throws in Forge SQL. The in-memory repo silently overwrites, so no test ever saw it. Written down as T17b rather than fixed here — the right fix depends on whether "Scan now" should share the nightly's row.
+
+**Next**
+- Agent (unblocked): T18 dashboard v1 (needs T16), then T19b suggested-fix preview.
+- Owner: T06 verification on the dev site still gates T07 / T09 / T13 / T15a / T16b / T17a / T17b (migration v005 should be checked there too); T12a scope decision.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-16 (Mon, night) — T16a check 6 follow-ups
 
 **Done**
