@@ -4,6 +4,27 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-18 (Wed, night) — T18 dashboard v1
+
+**Done**
+- Dismiss that survives rescans. `Repo.setFindingStatus(id, "open" | "dismissed")` and `Repo.findingsByStatus(spaceId, status, limit)`; findings now come back with their row `id` and `status` (`StoredFinding`). `replaceFindings` changed in two places: the duplicate check looks at open *and* dismissed rows, so a rescan that reproduces the identical finding keeps the dismissed row instead of inserting a fresh open one; and dismissed rows of the scanned page (or produced by its scan, for cross-page contradictions) that the scan no longer reports are deleted — a fixed page leaves no ghost rows, and a finding whose evidence changed ("3 dead links" → "2 dead links") is a new finding and shows up again. No schema migration: `findings.status` existed since v001.
+- `src/ui/dashboardRows.ts` (pure, tested): severity filter (drops pages left empty), high → medium → low order inside a page, `pageUrl` (site-relative `/wiki/pages/viewpage.action?pageId=…` — the app never learns the hostname), tab label (space key if given, else "Space <id>").
+- Dashboard: settings on top as before; below, one UI Kit `Tabs` tab per configured space. Each tab: severity `Select`, "Show dismissed" `Toggle`, the table (page title is a `Link` opening in a new tab; one line per finding with a severity lozenge, the label and a Dismiss / Restore button), and the space's cost table (was only ever shown for the first space). Resolvers: `topFindings` takes `status`, new `setFindingStatus`; both reject anything but `open` / `dismissed`. Saving spaces keeps a `spaceKey` the config already had.
+- 10 new tests; 129 total green; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Learned**
+- "Persists across scans" has to be defined by finding identity, not by page: the only identity the repo has is `(page, check, severity, evidence, suggestion, related)`, the same tuple the duplicate check already used. Reusing it means a dismissal is exactly as broad as the finding text — conservative in the right direction (a changed finding resurfaces) and no new column.
+- Deleting dismissed rows the scan no longer reproduces was the smaller fix compared with keeping them "for history": the open list is the product, history has no reader yet, and ghost rows would otherwise match a future identical finding months later and silently hide it.
+- Things only the dev site can confirm (added to T06's verification list): `UPDATE … affectedRows` shape from `@forge/sql`; UI Kit `Link` with a site-relative href inside a global page; `Select` / `Toggle` / `Tabs` props as typed in `@atlaskit/forge-react-types` 12.x.
+
+**Next**
+- Agent (unblocked, in order): T19 byline item (needs T18; the task itself adds the `confluence:contentBylineItem` module, which the backlog note already flags as a major version), then T21 listing copy, T19a rename propagation, T19b suggested-fix preview.
+- Owner: T06 verification on the dev site still gates T07 / T09 / T13 / T15a / T16b / T17a / T17b; T12a scope decision.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-17 (Tue, night) — T17 cost report
 
 **Done**

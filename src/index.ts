@@ -6,6 +6,7 @@ import { kvs } from "@forge/kvs";
 import { chat, list } from "@forge/llm";
 import { forgeClients } from "./forge/clients";
 import { ForgeSqlRepo, migrate } from "./db/forgeSqlRepo";
+import type { FindingStatus } from "./db/repo";
 import { forgeLlmClient } from "./llm/client";
 import { parseStaleThresholds } from "./checks/staleByType";
 import { costRows } from "./ui/costReport";
@@ -52,8 +53,15 @@ ui.define("setStaleDays", async ({ payload }) => {
 });
 ui.define("topFindings", async ({ payload }) => {
   await migrate();
-  const { spaceId, limit = 20 } = payload as { spaceId: string; limit?: number };
-  return repo.openFindings(spaceId, limit);
+  const { spaceId, limit = 20, status = "open" } = payload as { spaceId: string; limit?: number; status?: FindingStatus };
+  if (status !== "open" && status !== "dismissed") throw new Error(`unknown status: ${String(status)}`);
+  return repo.findingsByStatus(spaceId, status, Math.min(limit, 100));
+});
+ui.define("setFindingStatus", async ({ payload }) => {
+  await migrate();
+  const { id, status } = payload as { id: string; status: FindingStatus };
+  if (status !== "open" && status !== "dismissed") throw new Error(`unknown status: ${String(status)}`);
+  return { ok: await repo.setFindingStatus(String(id), status) };
 });
 ui.define("recentRuns", async ({ payload }) => {
   await migrate();

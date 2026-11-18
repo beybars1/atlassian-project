@@ -41,6 +41,20 @@ export interface BatchResult {
   finishedAt: string;
 }
 
+/** `open` = shown on the dashboard; `dismissed` = a human said "not a problem" (T18). */
+export type FindingStatus = "open" | "dismissed";
+
+/** A finding as stored: identity for the dashboard's dismiss button plus its status. */
+export interface StoredFinding extends Finding {
+  id: string;
+  status: FindingStatus;
+}
+
+export interface FindingsRow {
+  page: ScannedPage;
+  findings: StoredFinding[];
+}
+
 export interface Repo {
   getScannedVersions(spaceId: string): Promise<Map<string, number>>;
   /** Last stored state of one page (version + cached page type); undefined if never scanned. */
@@ -49,16 +63,23 @@ export interface Repo {
   /**
    * Replace everything the scan of `pageId` produced. Findings may target other pages (check 6
    * puts a contradiction on the page judged outdated); they are attributed to `pageId` as their
-   * source and replaced with it. A finding identical to one already open on its page is stored once.
+   * source and replaced with it. A finding identical to one already stored on its page — open or
+   * dismissed — is stored once, so a dismissal holds as long as the scan keeps reporting the same
+   * finding; a dismissed finding the scan no longer reports is dropped (T18).
    */
   replaceFindings(pageId: string, findings: Finding[]): Promise<void>;
+  /** Dismiss or reopen one finding by id; false when there is no such finding. */
+  setFindingStatus(id: string, status: FindingStatus): Promise<boolean>;
+  /** Pages of a space with their findings of one status, worst pages first. */
+  findingsByStatus(spaceId: string, status: FindingStatus, limit: number): Promise<FindingsRow[]>;
   /** Replace the stored facts of a page (check 6). */
   replaceFacts(pageId: string, facts: Fact[]): Promise<void>;
   /** Stored facts of one page (valid for `ScannedPage.factsVersion`). */
   factsOfPage(pageId: string): Promise<Fact[]>;
   /** Facts of scanned pages in a space for the given (entity, attribute) keys, with page context. */
   factsForKeys(spaceId: string, keys: Array<{ entity: string; attribute: string }>): Promise<StoredFact[]>;
-  openFindings(spaceId: string, limit: number): Promise<Array<{ page: ScannedPage; findings: Finding[] }>>;
+  /** `findingsByStatus(spaceId, "open", limit)`. */
+  openFindings(spaceId: string, limit: number): Promise<FindingsRow[]>;
   startRun(run: ScanRun): Promise<void>;
   /** Add a batch's pages and tokens to its run; returns the run as it now stands, undefined if no such run. */
   recordBatch(id: string, result: BatchResult): Promise<ScanRun | undefined>;
@@ -70,13 +91,16 @@ export class MemoryRepo implements Repo {
   pages = new Map<string, ScannedPage>();
   facts = new Map<string, Fact[]>();
   runs = new Map<string, ScanRun>();
-  /** Open findings with the page whose scan produced them. */
-  private rows: Array<{ source: string; finding: Finding }> = [];
+  /** Stored findings (open and dismissed) with the page whose scan produced them. */
+  private rows: Array<{ id: string; source: string; status: FindingStatus; finding: Finding }> = [];
+  private nextId = 1;
 
   /** Open findings per page (view over `rows`). */
   get findings(): Map<string, Finding[]> {
     const m = new Map<string, Finding[]>();
-    for (const { finding } of this.rows) m.set(finding.pageId, [...(m.get(finding.pageId) ?? []), finding]);
+    for (const { finding, status } of this.rows) {
+      if (status === "open") m.set(finding.pageId, [...(m.get(finding.pageId) ?? []), finding]);
+    }
     return m;
   }
 
@@ -92,11 +116,33 @@ export class MemoryRepo implements Repo {
     this.pages.set(p.pageId, p);
   }
   async replaceFindings(pageId: string, findings: Finding[]) {
-    this.rows = this.rows.filter((r) => r.source !== pageId && r.finding.pageId !== pageId);
+    const mine = (r: { source: string; finding: Finding }) => r.source === pageId || r.finding.pageId === pageId;
+    // Open findings of this scan are recomputed; dismissed ones stay only while the scan still reports them.
+    this.rows = this.rows.filter((r) => !mine(r) || (r.status === "dismissed" && findings.some((f) => sameFinding(r.finding, f))));
     for (const finding of findings) {
       const dup = this.rows.some((r) => sameFinding(r.finding, finding));
-      if (!dup) this.rows.push({ source: pageId, finding });
+      if (!dup) this.rows.push({ id: String(this.nextId++), source: pageId, status: "open", finding });
     }
+  }
+  async setFindingStatus(id: string, status: FindingStatus) {
+    const r = this.rows.find((x) => x.id === id);
+    if (!r) return false;
+    r.status = status;
+    return true;
+  }
+  async findingsByStatus(spaceId: string, status: FindingStatus, limit: number) {
+    const stored = new Map<string, StoredFinding[]>();
+    for (const r of this.rows) {
+      if (r.status === status) stored.set(r.finding.pageId, [...(stored.get(r.finding.pageId) ?? []), { ...r.finding, id: r.id, status: r.status }]);
+    }
+    const rows: Array<FindingsRow & { score: number }> = [];
+    for (const p of this.pages.values()) {
+      if (p.spaceId !== spaceId) continue;
+      const f = stored.get(p.pageId) ?? [];
+      if (f.length === 0) continue;
+      rows.push({ page: p, findings: f, score: severityScore(f) });
+    }
+    return rows.sort((a, b) => b.score - a.score).slice(0, limit).map(({ page, findings }) => ({ page, findings }));
   }
   async replaceFacts(pageId: string, facts: Fact[]) {
     this.facts.set(pageId, facts);
@@ -117,15 +163,7 @@ export class MemoryRepo implements Repo {
     return out;
   }
   async openFindings(spaceId: string, limit: number) {
-    const rows: Array<{ page: ScannedPage; findings: Finding[]; score: number }> = [];
-    for (const p of this.pages.values()) {
-      if (p.spaceId !== spaceId) continue;
-      const f = this.findings.get(p.pageId) ?? [];
-      if (f.length === 0) continue;
-      const score = f.reduce((s, x) => s + ({ high: 3, medium: 2, low: 1 } as const)[x.severity], 0);
-      rows.push({ page: p, findings: f, score });
-    }
-    return rows.sort((a, b) => b.score - a.score).slice(0, limit).map(({ page, findings }) => ({ page, findings }));
+    return this.findingsByStatus(spaceId, "open", limit);
   }
   async startRun(run: ScanRun) {
     this.runs.set(run.id, { ...run, usage: { fast: { ...run.usage.fast }, smart: { ...run.usage.smart } } });
@@ -149,6 +187,11 @@ export class MemoryRepo implements Repo {
       .slice(0, limit)
       .map((r) => ({ ...r, usage: { fast: { ...r.usage.fast }, smart: { ...r.usage.smart } } }));
   }
+}
+
+/** Page ranking on the dashboard: worst pages first. */
+export function severityScore(findings: Finding[]): number {
+  return findings.reduce((s, x) => s + ({ high: 3, medium: 2, low: 1 } as const)[x.severity], 0);
 }
 
 export function sameFinding(a: Finding, b: Finding): boolean {
