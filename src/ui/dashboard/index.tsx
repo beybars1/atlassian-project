@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import ForgeReconciler, { Text, Button, Heading, Stack, Inline, Label, Textfield, DynamicTable, Lozenge } from "@forge/react";
 import { invoke as forgeInvoke } from "@forge/bridge";
 import { findingLabel } from "../findingLabel";
+import type { CostRow } from "../costReport";
 
 /** invoke() may wrap the result in { body }; unwrap once here. */
 async function invoke<T>(fn: string, payload?: Record<string, unknown>): Promise<T> {
@@ -34,12 +35,16 @@ const App = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [staleDraft, setStaleDraft] = useState<Record<string, string>>({});
+  const [runs, setRuns] = useState<CostRow[]>([]);
 
   useEffect(() => {
     invoke<SpaceConfig[]>("getSpaces").then((s: SpaceConfig[]) => {
       setSpaces(s);
       setDraft(s.map((x: SpaceConfig) => x.spaceId).join(","));
-      if (s[0]) invoke<Row[]>("topFindings", { spaceId: s[0].spaceId }).then(setRows);
+      if (s[0]) {
+        invoke<Row[]>("topFindings", { spaceId: s[0].spaceId }).then(setRows);
+        invoke<CostRow[]>("recentRuns", { spaceId: s[0].spaceId }).then(setRuns);
+      }
     });
     invoke<StaleDays>("getStaleDays").then((d: StaleDays) =>
       setStaleDraft(Object.fromEntries(STALE_TYPES.map(([k]) => [k, d[k] == null ? "" : String(d[k])]))),
@@ -107,6 +112,25 @@ const App = () => {
           ],
         }))}
         emptyView={<Text>No findings yet. Save a space and run a scan.</Text>}
+      />
+      <Heading as="h3">Scan cost</Heading>
+      <Text>LLM tokens per nightly run and their estimated price at list rates. "Per 2,000 pages" projects this run's rate onto a full scan of a large space.</Text>
+      <DynamicTable
+        head={{
+          cells: [{ content: "Run" }, { content: "Pages scanned" }, { content: "Haiku tokens" }, { content: "Sonnet tokens" }, { content: "Cost" }, { content: "Per 2,000 pages" }],
+        }}
+        rows={runs.map((r) => ({
+          key: r.id,
+          cells: [
+            { content: r.date },
+            { content: r.pages },
+            { content: r.haiku },
+            { content: r.sonnet },
+            { content: r.overBudget ? <Lozenge appearance="removed">{r.cost}</Lozenge> : r.cost },
+            { content: r.per2000 },
+          ],
+        }))}
+        emptyView={<Text>No scan runs yet.</Text>}
       />
     </Stack>
   );

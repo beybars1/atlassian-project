@@ -50,5 +50,10 @@ CREATE TABLE IF NOT EXISTS scan_runs (
   started_at    DATETIME    NOT NULL,
   finished_at   DATETIME    NULL,
   pages_seen    INT         NOT NULL DEFAULT 0,
-  pages_scanned INT         NOT NULL DEFAULT 0
+  pages_scanned INT         NOT NULL DEFAULT 0,  -- summed over the run's batches
+  fast_in       BIGINT      NOT NULL DEFAULT 0,  -- v005 (T17): Haiku tokens (classification + extraction)
+  fast_out      BIGINT      NOT NULL DEFAULT 0,
+  smart_in      BIGINT      NOT NULL DEFAULT 0,  -- v005 (T17): Sonnet tokens (adjudication)
+  smart_out     BIGINT      NOT NULL DEFAULT 0,
+  INDEX idx_scan_runs_space (space_id, started_at)
 );

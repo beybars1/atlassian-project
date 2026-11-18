@@ -7,7 +7,7 @@ import sql, { migrationRunner } from "@forge/sql";
 import type { Finding, PageType } from "../checks/types";
 import type { StoredFact } from "../checks/contradiction";
 import type { Fact } from "../llm/extractFacts";
-import type { Repo, ScannedPage, ScanRun } from "./repo";
+import type { BatchResult, Repo, ScannedPage, ScanRun } from "./repo";
 
 const SCHEMA = [
   [
@@ -36,6 +36,11 @@ const SCHEMA = [
   // two-page finding (dashboard label "CONTRADICTION vs <title>").
   ["v004_facts_issue_keys", `ALTER TABLE facts ADD COLUMN issue_keys VARCHAR(255) NULL`],
   ["v004_findings_related", `ALTER TABLE findings ADD COLUMN related_page_id VARCHAR(32) NULL, ADD COLUMN related_page_title VARCHAR(512) NULL`],
+  // T17: LLM tokens per run, one pair of counters per model tier (priced at read time, see src/llm/cost.ts).
+  [
+    "v005_scan_runs_tokens",
+    `ALTER TABLE scan_runs ADD COLUMN fast_in BIGINT NOT NULL DEFAULT 0, ADD COLUMN fast_out BIGINT NOT NULL DEFAULT 0, ADD COLUMN smart_in BIGINT NOT NULL DEFAULT 0, ADD COLUMN smart_out BIGINT NOT NULL DEFAULT 0, ADD INDEX idx_scan_runs_space (space_id, started_at)`,
+  ],
 ] as const;
 
 /** `issue_keys` column ↔ `Fact.issueKeys` (comma-separated; keys never contain commas). */
@@ -194,15 +199,42 @@ export class ForgeSqlRepo implements Repo {
 
   async startRun(run: ScanRun) {
     await sql
-      .prepare("INSERT INTO scan_runs (id, space_id, started_at, pages_seen, pages_scanned) VALUES (?, ?, ?, ?, ?)")
-      .bindParams(run.id, run.spaceId, dt(run.startedAt), run.pagesSeen, run.pagesScanned)
+      .prepare("INSERT INTO scan_runs (id, space_id, started_at, pages_seen, pages_scanned, fast_in, fast_out, smart_in, smart_out) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bindParams(run.id, run.spaceId, dt(run.startedAt), run.pagesSeen, run.pagesScanned, run.usage.fast.input, run.usage.fast.output, run.usage.smart.input, run.usage.smart.output)
       .execute();
   }
 
-  async finishRun(id: string, patch: Partial<ScanRun>) {
+  async recordBatch(id: string, r: BatchResult) {
+    // Batches of one run finish in any order, possibly at the same time: increment in SQL, never read-modify-write.
     await sql
-      .prepare("UPDATE scan_runs SET finished_at = ?, pages_seen = COALESCE(?, pages_seen), pages_scanned = COALESCE(?, pages_scanned) WHERE id = ?")
-      .bindParams(patch.finishedAt ? dt(patch.finishedAt) : null, patch.pagesSeen ?? null, patch.pagesScanned ?? null, id)
+      .prepare(
+        `UPDATE scan_runs SET finished_at = ?, pages_scanned = pages_scanned + ?,
+           fast_in = fast_in + ?, fast_out = fast_out + ?, smart_in = smart_in + ?, smart_out = smart_out + ?
+         WHERE id = ?`,
+      )
+      .bindParams(dt(r.finishedAt), r.pagesScanned, r.usage.fast.input, r.usage.fast.output, r.usage.smart.input, r.usage.smart.output, id)
       .execute();
+    const rows = await sql.prepare<RunRow>(`${SELECT_RUN} WHERE id = ?`).bindParams(id).execute();
+    return rows.rows[0] ? toRun(rows.rows[0]) : undefined;
+  }
+
+  async recentRuns(spaceId: string, limit: number) {
+    const rows = await sql
+      .prepare<RunRow>(`${SELECT_RUN} WHERE space_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`)
+      .bindParams(spaceId, limit)
+      .execute();
+    return rows.rows.map(toRun);
   }
 }
+
+type RunRow = {
+  id: string; space_id: string; started_at: string; finished_at: string | null; pages_seen: number; pages_scanned: number;
+  fast_in: number; fast_out: number; smart_in: number; smart_out: number;
+};
+const SELECT_RUN = "SELECT id, space_id, started_at, finished_at, pages_seen, pages_scanned, fast_in, fast_out, smart_in, smart_out FROM scan_runs";
+const toRun = (r: RunRow): ScanRun => ({
+  id: r.id, spaceId: r.space_id, startedAt: r.started_at, finishedAt: r.finished_at ?? undefined,
+  pagesSeen: r.pages_seen, pagesScanned: r.pages_scanned,
+  // BIGINT may come back as a string depending on the driver; Number() keeps the arithmetic honest.
+  usage: { fast: { input: Number(r.fast_in), output: Number(r.fast_out) }, smart: { input: Number(r.smart_in), output: Number(r.smart_out) } },
+});

@@ -204,7 +204,7 @@ describe("scanBatch wiring", () => {
     fetched.set("2", { ...page({ id: "2", title: "Team charter", lastModified: "2026-11-01T00:00:00Z" }), ...parseStorage(STORAGE_CLEAN), labels: [] });
     const f = fakeLlm({ type: "runbook", confidence: "high" });
     const event = { runId: "r", spaceId: "100", pageIds: ["1", "2"] };
-    await repo.startRun({ id: "r:100", spaceId: "100", startedAt: NOW, pagesSeen: 2, pagesScanned: 0 });
+    await repo.startRun({ id: "r:100", spaceId: "100", startedAt: NOW, pagesSeen: 2, pagesScanned: 0, usage: { fast: { input: 0, output: 0 }, smart: { input: 0, output: 0 } } });
 
     await scanBatch(event, repo, world, { llm: f.llm });
     expect(f.calls.map((c) => c.user.includes("Payments service runbook"))).toEqual([true]); // page 2 is too short for the LLM

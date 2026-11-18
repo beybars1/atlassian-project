@@ -10,6 +10,7 @@ import { fetchPage } from "../forge/confluencePages";
 import { adjudicateConflict } from "../llm/adjudicate";
 import { classifyPageType } from "../llm/classifyPage";
 import type { LlmClient } from "../llm/client";
+import { addUsage, costAlert, emptyUsage, usageCostUsd, type LlmUsage } from "../llm/cost";
 import { extractFacts, MIN_EXTRACT_CHARS, type Fact } from "../llm/extractFacts";
 import type { ScanBatchEvent } from "../scan/orchestrate";
 
@@ -20,11 +21,9 @@ export interface ScanDeps {
   staleThresholds?: StaleThresholds;
 }
 
-type Tokens = { input: number; output: number };
-
 export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clients, deps: ScanDeps = {}): Promise<number> {
   const checks = [...V0_CHECKS, makeStaleByType(deps.staleThresholds)];
-  const tokens: Tokens = { input: 0, output: 0 };
+  const tokens = emptyUsage();
   let scanned = 0;
   for (const pageId of event.pageIds) {
     try {
@@ -44,8 +43,7 @@ export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clie
           adjudicate: (conflict) => adjudicateConflict(llm, conflict),
           jira: (key) => clients.jira.getIssue(key),
         });
-        tokens.input += c.usage.input;
-        tokens.output += c.usage.output;
+        addUsage(tokens, "smart", c.usage); // adjudication is the only Sonnet call
         findings.push(...c.findings);
       }
 
@@ -68,8 +66,15 @@ export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clie
       console.error(`scan ${pageId} failed`, err);
     }
   }
-  if (tokens.input || tokens.output) console.log(`batch llm tokens in=${tokens.input} out=${tokens.output}`);
-  await repo.finishRun(`${event.runId}:${event.spaceId}`, { finishedAt: clients.now().toISOString(), pagesScanned: scanned });
+  const spent = usageCostUsd(tokens);
+  if (spent > 0) {
+    console.log(
+      `batch llm tokens haiku in=${tokens.fast.input} out=${tokens.fast.output} sonnet in=${tokens.smart.input} out=${tokens.smart.output} $${spent.toFixed(4)}`,
+    );
+  }
+  const run = await repo.recordBatch(`${event.runId}:${event.spaceId}`, { pagesScanned: scanned, usage: tokens, finishedAt: clients.now().toISOString() });
+  const alert = run && costAlert(run, tokens);
+  if (alert) console.warn(alert);
   return scanned;
 }
 
@@ -82,13 +87,12 @@ async function resolvePageType(
   page: { id: string; title: string; text: string; labels: string[]; version: number },
   prev: ScannedPage | undefined,
   llm: LlmClient | undefined,
-  tokens: Tokens,
+  tokens: LlmUsage,
 ): Promise<PageType | undefined> {
   if (prev?.pageType && prev.version === page.version) return prev.pageType;
   try {
     const c = await classifyPageType(llm, page);
-    tokens.input += c.usage.input;
-    tokens.output += c.usage.output;
+    addUsage(tokens, "fast", c.usage);
     return c.type;
   } catch (err) {
     console.warn(`classify ${page.id} failed`, err);
@@ -106,15 +110,14 @@ async function resolveFacts(
   prev: ScannedPage | undefined,
   repo: Repo,
   llm: LlmClient | undefined,
-  tokens: Tokens,
+  tokens: LlmUsage,
 ): Promise<{ facts: Fact[]; fresh: boolean } | undefined> {
   if (!llm) return undefined;
   if (prev?.factsVersion === page.version) return { facts: await repo.factsOfPage(page.id), fresh: false };
   if (page.text.length < MIN_EXTRACT_CHARS) return { facts: [], fresh: true };
   try {
     const r = await extractFacts(llm, page);
-    tokens.input += r.usage.input;
-    tokens.output += r.usage.output;
+    addUsage(tokens, "fast", r.usage);
     return { facts: r.facts, fresh: true };
   } catch (err) {
     console.warn(`extract facts ${page.id} failed`, err);

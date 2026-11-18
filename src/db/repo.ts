@@ -5,6 +5,7 @@
 import type { Finding, PageType } from "../checks/types";
 import type { StoredFact } from "../checks/contradiction";
 import type { Fact } from "../llm/extractFacts";
+import { addUsage, emptyUsage, type LlmUsage } from "../llm/cost";
 
 export interface ScannedPage {
   pageId: string;
@@ -20,13 +21,24 @@ export interface ScannedPage {
   factsVersion?: number;
 }
 
+/** One nightly run of one space (`<date>:<spaceId>`); batches add to it as they finish (T17). */
 export interface ScanRun {
   id: string;
   spaceId: string;
   startedAt: string;
+  /** When the latest batch finished. Batches are independent, so this is "last activity", not "all done". */
   finishedAt?: string;
   pagesSeen: number;
   pagesScanned: number;
+  /** LLM tokens per tier, summed over the run's batches. */
+  usage: LlmUsage;
+}
+
+/** What one worker batch adds to its run. */
+export interface BatchResult {
+  pagesScanned: number;
+  usage: LlmUsage;
+  finishedAt: string;
 }
 
 export interface Repo {
@@ -48,7 +60,10 @@ export interface Repo {
   factsForKeys(spaceId: string, keys: Array<{ entity: string; attribute: string }>): Promise<StoredFact[]>;
   openFindings(spaceId: string, limit: number): Promise<Array<{ page: ScannedPage; findings: Finding[] }>>;
   startRun(run: ScanRun): Promise<void>;
-  finishRun(id: string, patch: Partial<ScanRun>): Promise<void>;
+  /** Add a batch's pages and tokens to its run; returns the run as it now stands, undefined if no such run. */
+  recordBatch(id: string, result: BatchResult): Promise<ScanRun | undefined>;
+  /** Runs of a space, newest first. */
+  recentRuns(spaceId: string, limit: number): Promise<ScanRun[]>;
 }
 
 export class MemoryRepo implements Repo {
@@ -113,11 +128,26 @@ export class MemoryRepo implements Repo {
     return rows.sort((a, b) => b.score - a.score).slice(0, limit).map(({ page, findings }) => ({ page, findings }));
   }
   async startRun(run: ScanRun) {
-    this.runs.set(run.id, run);
+    this.runs.set(run.id, { ...run, usage: { fast: { ...run.usage.fast }, smart: { ...run.usage.smart } } });
   }
-  async finishRun(id: string, patch: Partial<ScanRun>) {
+  async recordBatch(id: string, result: BatchResult) {
     const r = this.runs.get(id);
-    if (r) this.runs.set(id, { ...r, ...patch });
+    if (!r) return undefined;
+    const usage = emptyUsage();
+    addUsage(usage, "fast", r.usage.fast);
+    addUsage(usage, "smart", r.usage.smart);
+    addUsage(usage, "fast", result.usage.fast);
+    addUsage(usage, "smart", result.usage.smart);
+    const next: ScanRun = { ...r, pagesScanned: r.pagesScanned + result.pagesScanned, finishedAt: result.finishedAt, usage };
+    this.runs.set(id, next);
+    return { ...next, usage: { fast: { ...usage.fast }, smart: { ...usage.smart } } };
+  }
+  async recentRuns(spaceId: string, limit: number) {
+    return [...this.runs.values()]
+      .filter((r) => r.spaceId === spaceId)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id))
+      .slice(0, limit)
+      .map((r) => ({ ...r, usage: { fast: { ...r.usage.fast }, smart: { ...r.usage.smart } } }));
   }
 }
 

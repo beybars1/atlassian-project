@@ -7,6 +7,7 @@ import { kvs } from "@forge/kvs";
 import { listPageHeads } from "../forge/confluencePages";
 import { batches, pagesToScan, type ScanBatchEvent } from "../scan/orchestrate";
 import type { Repo } from "../db/repo";
+import { emptyUsage } from "../llm/cost";
 
 export interface SpaceConfig {
   spaceId: string;
@@ -31,6 +32,7 @@ export async function runNightly(repo: Repo): Promise<{ spaces: number; batches:
       startedAt: new Date().toISOString(),
       pagesSeen: heads.length,
       pagesScanned: 0,
+      usage: emptyUsage(),
     });
     for (const b of batches(todo)) {
       const event: ScanBatchEvent = { runId, spaceId: s.spaceId, spaceKey: s.spaceKey, pageIds: b.map((p) => p.id) };

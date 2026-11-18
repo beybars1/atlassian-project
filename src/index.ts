@@ -8,6 +8,7 @@ import { forgeClients } from "./forge/clients";
 import { ForgeSqlRepo, migrate } from "./db/forgeSqlRepo";
 import { forgeLlmClient } from "./llm/client";
 import { parseStaleThresholds } from "./checks/staleByType";
+import { costRows } from "./ui/costReport";
 import { runNightly, type SpaceConfig } from "./triggers/nightly";
 import { scanBatch as scanBatchImpl } from "./workers/scanBatch";
 import type { ScanBatchEvent } from "./scan/orchestrate";
@@ -53,6 +54,11 @@ ui.define("topFindings", async ({ payload }) => {
   await migrate();
   const { spaceId, limit = 20 } = payload as { spaceId: string; limit?: number };
   return repo.openFindings(spaceId, limit);
+});
+ui.define("recentRuns", async ({ payload }) => {
+  await migrate();
+  const { spaceId, limit = 10 } = payload as { spaceId: string; limit?: number };
+  return costRows(await repo.recentRuns(spaceId, Math.min(limit, 50)));
 });
 ui.define("runNow", async () => {
   await migrate();
