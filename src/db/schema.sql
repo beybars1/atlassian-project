@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS findings (
   severity    VARCHAR(8)   NOT NULL,
   evidence    TEXT         NOT NULL,
   suggestion  TEXT         NOT NULL,
-  status      VARCHAR(16)  NOT NULL DEFAULT 'open',
+  status      VARCHAR(16)  NOT NULL DEFAULT 'open',  -- 'open' | 'dismissed' (T18: a dismissed row survives rescans that reproduce the same finding)
   created_at  DATETIME     NOT NULL,
   source_page_id VARCHAR(32) NULL,       -- v003 (T16): page whose scan produced the finding (check 6 may target another page)
   related_page_id    VARCHAR(32)  NULL,  -- v004 (T16a): the other page of a two-page finding (check 6: the page with the current value)

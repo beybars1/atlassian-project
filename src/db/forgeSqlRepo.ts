@@ -3,11 +3,11 @@
  * API surface per @forge/sql 4.x: sql.prepare(query).bindParams(...).execute(), migrationRunner.enqueue/run.
  * Verify against the package README on first deploy — this file is the one most likely to need edits.
  */
-import sql, { migrationRunner } from "@forge/sql";
+import sql, { migrationRunner, type UpdateQueryResponse } from "@forge/sql";
 import type { Finding, PageType } from "../checks/types";
 import type { StoredFact } from "../checks/contradiction";
 import type { Fact } from "../llm/extractFacts";
-import type { BatchResult, Repo, ScannedPage, ScanRun } from "./repo";
+import { sameFinding, severityScore, type BatchResult, type FindingStatus, type Repo, type ScannedPage, type ScanRun, type StoredFinding } from "./repo";
 
 const SCHEMA = [
   [
@@ -104,12 +104,28 @@ export class ForgeSqlRepo implements Repo {
       .prepare("DELETE FROM findings WHERE status = 'open' AND (page_id = ? OR source_page_id = ?)")
       .bindParams(pageId, pageId)
       .execute();
+    // Dismissed findings of this scan stay only while the scan still reports them (T18): the
+    // dismissal was about one specific finding, and a page that was fixed must not keep a ghost row.
+    const dismissed = await sql
+      .prepare<{ id: number; page_id: string; check_code: string; severity: string; evidence: string; suggestion: string; related_page_id: string | null }>(
+        "SELECT id, page_id, check_code, severity, evidence, suggestion, related_page_id FROM findings WHERE status = 'dismissed' AND (page_id = ? OR source_page_id = ?)",
+      )
+      .bindParams(pageId, pageId)
+      .execute();
+    for (const d of dismissed.rows) {
+      const stored: Finding = {
+        pageId: d.page_id, check: d.check_code as Finding["check"], severity: d.severity as Finding["severity"],
+        evidence: d.evidence, suggestion: d.suggestion, ...(d.related_page_id ? { related: { pageId: d.related_page_id, pageTitle: "" } } : {}),
+      };
+      if (!findings.some((f) => sameFinding(stored, f))) await sql.prepare("DELETE FROM findings WHERE id = ?").bindParams(d.id).execute();
+    }
     const now = dt(new Date().toISOString());
     for (const f of findings) {
-      // Same finding already open on its page (e.g. both sides of a contradiction scanned tonight) → keep one.
+      // Same finding already stored on its page — open (both sides of a contradiction scanned
+      // tonight) or dismissed (a human said so) → keep the one row.
       const dup = await sql
         .prepare<{ id: number }>(
-          "SELECT id FROM findings WHERE page_id = ? AND check_code = ? AND severity = ? AND evidence = ? AND suggestion = ? AND (related_page_id <=> ?) AND status = 'open' LIMIT 1",
+          "SELECT id FROM findings WHERE page_id = ? AND check_code = ? AND severity = ? AND evidence = ? AND suggestion = ? AND (related_page_id <=> ?) AND status IN ('open', 'dismissed') LIMIT 1",
         )
         .bindParams(f.pageId, f.check, f.severity, f.evidence, f.suggestion, f.related?.pageId ?? null)
         .execute();
@@ -165,20 +181,32 @@ export class ForgeSqlRepo implements Repo {
   }
 
   async openFindings(spaceId: string, limit: number) {
+    return this.findingsByStatus(spaceId, "open", limit);
+  }
+
+  async setFindingStatus(id: string, status: FindingStatus) {
+    const n = Number(id);
+    if (!Number.isInteger(n) || n <= 0) return false;
+    const r = await sql.prepare<UpdateQueryResponse>("UPDATE findings SET status = ? WHERE id = ?").bindParams(status, n).execute();
+    return r.rows.affectedRows > 0;
+  }
+
+  async findingsByStatus(spaceId: string, status: FindingStatus, limit: number) {
     const rows = await sql
       .prepare<{
-        page_id: string; space_id: string; title: string; version: number; owner_id: string | null;
+        id: number; page_id: string; space_id: string; title: string; version: number; owner_id: string | null;
         last_modified: string; scanned_at: string; check_code: string; severity: string; evidence: string; suggestion: string;
         related_page_id: string | null; related_page_title: string | null;
       }>(
-        `SELECT p.page_id, p.space_id, p.title, p.version, p.owner_id, p.last_modified, p.scanned_at,
+        `SELECT f.id, p.page_id, p.space_id, p.title, p.version, p.owner_id, p.last_modified, p.scanned_at,
                 f.check_code, f.severity, f.evidence, f.suggestion, f.related_page_id, f.related_page_title
          FROM findings f JOIN pages p ON p.page_id = f.page_id
-         WHERE p.space_id = ? AND f.status = 'open'`,
+         WHERE p.space_id = ? AND f.status = ?
+         ORDER BY f.id`,
       )
-      .bindParams(spaceId)
+      .bindParams(spaceId, status)
       .execute();
-    const byPage = new Map<string, { page: ScannedPage; findings: Finding[]; score: number }>();
+    const byPage = new Map<string, { page: ScannedPage; findings: StoredFinding[] }>();
     for (const r of rows.rows) {
       const e = byPage.get(r.page_id) ?? {
         page: {
@@ -186,15 +214,19 @@ export class ForgeSqlRepo implements Repo {
           ownerId: r.owner_id ?? undefined, lastModified: r.last_modified, scannedAt: r.scanned_at,
         },
         findings: [],
-        score: 0,
       };
-      const sev = r.severity as Finding["severity"];
       const rel = related(r.related_page_id, r.related_page_title);
-      e.findings.push({ pageId: r.page_id, check: r.check_code as Finding["check"], severity: sev, evidence: r.evidence, suggestion: r.suggestion, ...(rel ? { related: rel } : {}) });
-      e.score += { high: 3, medium: 2, low: 1 }[sev];
+      e.findings.push({
+        id: String(r.id), status, pageId: r.page_id, check: r.check_code as Finding["check"], severity: r.severity as Finding["severity"],
+        evidence: r.evidence, suggestion: r.suggestion, ...(rel ? { related: rel } : {}),
+      });
       byPage.set(r.page_id, e);
     }
-    return [...byPage.values()].sort((a, b) => b.score - a.score).slice(0, limit).map(({ page, findings }) => ({ page, findings }));
+    return [...byPage.values()]
+      .map((e) => ({ ...e, score: severityScore(e.findings) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ page, findings }) => ({ page, findings }));
   }
 
   async startRun(run: ScanRun) {
