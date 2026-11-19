@@ -4,6 +4,28 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-19 (Thu, night) — T19 byline item
+
+**Done**
+- `confluence:contentBylineItem` module `wikiverify-byline` (the module PLAN §architecture already lists; T19 is the owner's task for it): static `title: WikiVerify` + `tooltip`, `dynamicProperties` → new function `byline-properties` (`index.bylineProperties`), popup resource `src/ui/byline/index.tsx` (UI Kit, `render: native`) with its own read-only resolver function `byline` (`index.byline`). The dashboard's resolver was *not* reused: every page viewer reaches the byline's resolver, and the dashboard one has `setSpaces` / `setStaleDays` / `runNow`. Text only — a dynamic icon needs an external image URL (`forge lint` would ask for `permissions.external.images`), and this app has no external permissions.
+- `src/ui/bylineSummary.ts` (pure, tested): `bylineSummary(page, openFindings)` → `{ state, title, tooltip }`. Never scanned → neutral "WikiVerify" + "has not scanned this page yet" (the item sits on every page of the site, so an unscanned page must not look like a finding, and must never read "verified"). Scanned, nothing open → "✓ verified" + "Last checked <date> (page version n)". Otherwise "⚠ N issue(s)" + severities worst-first and the distinct labels (`findingLabel`, so a contradiction names the other page), cut with "…" to the 255-char byline tooltip cap. `bylineStatus(repo, pageId)` adds the open findings worst-first for the popup. `contentIdFromPayload` accepts `extension.content.id` (documented) or `context.extension.content.id` and refuses anything that is not digits — the id goes into SQL.
+- `Repo.findingsOfPage(pageId, status)` (memory + Forge SQL, `WHERE page_id = ? AND status = ?`). No schema change.
+- Popup: spinner → unscanned (info message) / verified (success message) / list of findings with severity lozenge, label, evidence and suggestion; dismissing stays on the dashboard, the popup says so.
+- 9 new tests; 138 total green; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI (and this is the first module added since the scaffold, so it matters — T19c).
+
+**Learned**
+- The chip's text does not come from the resource: `dynamicProperties` is a backend function Confluence calls when rendering the byline, and the resource is only the click-through popup. That split is what keeps the byline cheap — one SQL read per page view, no UI bundle until someone clicks.
+- "Verified" is about the stored version: the byline cannot see the page's current version number (`extension.content` carries only the id), so a page edited this afternoon still shows yesterday's verdict until the nightly run. The tooltip states the check date and version for that reason. Fetching the live version from the byline would cost a REST call per page view; not worth it before T06 shows real latency.
+- Dev-site items for T06 / T19c: the exact `dynamicProperties` payload shape (the code logs the payload's top-level keys when it finds no id), whether a `tooltip` must be in the manifest for a dynamic tooltip to show (it is, to be safe), and `useProductContext().extension.content.id` in a byline popup.
+
+**Next**
+- Agent (unblocked, in order): T21 listing copy (needs T08, T18), T19a rename propagation (needs T11), T19b suggested-fix preview (needs T16). T22 needs T19 — done — but `forge eligibility` needs a logged-in CLI, so it is effectively owner-gated like T06.
+- Owner: T06 verification on the dev site still gates T07 / T09 / T13 / T15a / T16b / T17a / T17b / T19c; T12a scope decision. Merging T19 is a major version (new module) — users re-consent on upgrade.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-18 (Wed, night) — T18 dashboard v1
 
 **Done**
