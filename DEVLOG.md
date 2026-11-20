@@ -25,6 +25,25 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-21 (Sat, night) — T21 listing copy
+
+**Done**
+- `notes/listing.md`: three name options (recommended "WikiVerify for Confluence" — the "X for Confluence" pattern Atlassian allows; the decision stays with T20), two taglines, the 250-character summary, the 1000-character "more details", three highlights (title + summary + which screenshot), five screenshot specs (what is in the frame on the seeded space, 1840 × 900, what to blur) with captions, and logo/banner notes. Every claim maps to a check or UI that exists on main (T19 included); the paid tier, the badge and the concrete fix text (T19b) are deliberately not promised. Character counts were measured (`[...s].length`) and sit in the tables.
+- Copy follows `notes/phrases.md`: "wrong pages", broken links, closed Jira issues, renamed components, evidence, suggested fix; no "health score / freshness / trust" anywhere.
+- No code change; typecheck, tests and manifest validation green on the branch as on main. PR #9 (T19) was awaiting review when the branch was cut and merged before this one; the branch was rebased onto it (review of PR #10).
+
+**Learned**
+- Marketplace limits (Atlassian "Building your presence on Marketplace", dated 2020, so the form wins if it disagrees): name ≤ 60, tagline ≤ 130, summary ≤ 250, more details ≤ 1000 plain text, exactly three highlights with title ≤ 50 / summary ≤ 220, screenshots 1840 × 900 (cropped 580 × 330), up to 5 extra per highlight, logo 144 × 144, banner 1120 × 548. Documentation URL is optional for a free app.
+- The attachment half of the dead-link check is silent until T12a, so the listing says "pages and anchors" — worth remembering for every later copy edit: the copy must describe the manifest that ships, not the code that exists.
+
+**Next**
+- Agent (unblocked, in order): T19a rename propagation (needs T11), T19b suggested-fix preview (needs T16). T22 needs T19 (merged) but `forge eligibility` needs a logged-in CLI — owner-gated like T06.
+- Owner: screenshots S1–S5 can only be taken on the seeded dev site (T06 → T07); app name decision and the questionnaire/EULA/support URL (T20); T12a scope decision. T06 verification still gates T07 / T09 / T13 / T15a / T16b / T17a / T17b / T19c.
+
+**Hours:** ~0.5
+
+---
+
 ## 2026-11-19 (Thu, night) — T19 byline item
 
 **Done**
