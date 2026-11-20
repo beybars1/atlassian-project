@@ -19,13 +19,15 @@ const SEVERITY_APPEARANCE = { high: "removed", medium: "moved", low: "default" }
 
 const App = () => {
   const context = useProductContext();
+  // Only to decide what to render: the resolver takes the page id from its own (server-filled)
+  // context, never from a payload, so no viewer can ask for another page's findings.
   const pageId: string | undefined = context?.extension?.content?.id != null ? String(context.extension.content.id) : undefined;
   const [status, setStatus] = useState<BylineStatus | undefined>();
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     if (!pageId) return;
-    invoke<BylineStatus>("bylineStatus", { pageId })
+    invoke<BylineStatus>("bylineStatus")
       .then(setStatus)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [pageId]);

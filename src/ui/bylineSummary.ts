@@ -78,6 +78,17 @@ export async function bylineStatus(repo: Repo, pageId: string): Promise<BylineSt
 }
 
 /**
+ * The page a byline resolver call is about. SECURITY: the id must come from the resolver's
+ * `context`, which Forge fills server-side with the page the byline sits on — never from the
+ * browser-supplied `payload`. Findings carry verbatim page content (quotes, evidence, titles of
+ * related pages), so an id taken from the payload would let any viewer read the findings of a
+ * page they have no access to. The payload is deliberately not a parameter here.
+ */
+export function bylinePageIdFromContext(request: { context?: unknown }): string | undefined {
+  return contentIdFromPayload(request.context);
+}
+
+/**
  * The content id out of the `dynamicProperties` function's payload. Forge documents it as
  * `extension.content.id`; the nested `context` form is accepted in case the runtime wraps it
  * (to be confirmed on the dev site, T06). Anything but digits is refused — the id goes into SQL.

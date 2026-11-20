@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MemoryRepo, type ScannedPage } from "../src/db/repo";
 import type { Finding } from "../src/checks/types";
-import { bylineStatus, bylineSummary, contentIdFromPayload, type BylineFinding } from "../src/ui/bylineSummary";
+import { bylinePageIdFromContext, bylineStatus, bylineSummary, contentIdFromPayload, type BylineFinding } from "../src/ui/bylineSummary";
 
 const base = { spaceId: "s", version: 3, lastModified: "2026-01-01T10:00:00Z", scannedAt: "2026-11-18T02:30:00Z" };
 const page: ScannedPage = { ...base, pageId: "1", title: "a" };
@@ -102,5 +102,17 @@ describe("content id from the dynamicProperties payload (T19)", () => {
     expect(contentIdFromPayload({})).toBeUndefined();
     expect(contentIdFromPayload(undefined)).toBeUndefined();
     expect(contentIdFromPayload(null)).toBeUndefined();
+  });
+});
+
+describe("byline resolver page id (T19, PR #9 review)", () => {
+  it("comes from the server-filled resolver context, never from the browser payload", () => {
+    const context = { extension: { type: "confluence:contentBylineItem", content: { id: "12345" } } };
+    expect(bylinePageIdFromContext({ context })).toBe("12345");
+    // A payload naming another page must not change the answer — findings quote page content, and a
+    // viewer must only ever see the findings of the page the byline is rendered on.
+    expect(bylinePageIdFromContext({ context, ...({ payload: { pageId: "99999" } } as object) })).toBe("12345");
+    expect(bylinePageIdFromContext({ ...({ payload: { pageId: "99999" } } as object) })).toBeUndefined();
+    expect(bylinePageIdFromContext({ context: {} })).toBeUndefined();
   });
 });

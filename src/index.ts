@@ -10,7 +10,7 @@ import type { FindingStatus } from "./db/repo";
 import { forgeLlmClient } from "./llm/client";
 import { parseStaleThresholds } from "./checks/staleByType";
 import { costRows } from "./ui/costReport";
-import { bylineStatus, contentIdFromPayload } from "./ui/bylineSummary";
+import { bylinePageIdFromContext, bylineStatus, contentIdFromPayload } from "./ui/bylineSummary";
 import { runNightly, type SpaceConfig } from "./triggers/nightly";
 import { scanBatch as scanBatchImpl } from "./workers/scanBatch";
 import type { ScanBatchEvent } from "./scan/orchestrate";
@@ -78,9 +78,11 @@ export const resolver = ui.getDefinitions();
 // Byline item (T19). Its own resolver, read-only: every page viewer reaches it, and the dashboard's
 // resolver has write methods (spaces, thresholds, "Scan now") that must stay out of their reach.
 const bylineUi = new Resolver();
-bylineUi.define("bylineStatus", async ({ payload }) => {
-  const pageId = contentIdFromPayload({ extension: { content: { id: (payload as { pageId?: unknown }).pageId } } });
-  if (!pageId) throw new Error("bylineStatus: pageId must be a numeric content id");
+bylineUi.define("bylineStatus", async ({ context }) => {
+  // The page id comes from the trusted resolver context (the page the byline is rendered on), never
+  // from the payload: a payload id would let any viewer read another page's findings (PR #9 review).
+  const pageId = bylinePageIdFromContext({ context });
+  if (!pageId) throw new Error("bylineStatus: no content id in the resolver context");
   await migrate();
   return bylineStatus(repo, pageId);
 });
