@@ -138,3 +138,29 @@ export const STORAGE_CONTRADICTION_ONBOARDING = `
 <h2>First week</h2>
 <p>Read the runbook, get access to the dashboards, and shadow one on-call shift.</p>
 `;
+
+/**
+ * T19a — rename propagation. Project PAY (see jiraRenamed.test.ts world) renamed component
+ * "Payments Gateway" → "Card Gateway" and version "2.5" → "2.5.0"; "Card Vault" was once "Vault"
+ * but the page says both names. Planted faults:
+ *   - "Payments Gateway component"            → old component name, new one absent → flagged (medium)
+ *   - "release 2.5"                           → old version name with release context → flagged (low)
+ * Planted non-faults (must NOT be flagged):
+ *   - "Card Vault (formerly Vault)"           → the page already uses the new name
+ *   - "Ledger"                                → renamed in project BIL, but the page cites no BIL issue
+ *   - "Legacy Gateway"                        → archived, not renamed (that is T11's finding, not this one)
+ */
+export const STORAGE_RENAMED_REFS = `
+<h1>Checkout service — integration notes</h1>
+<p>Tracked in <a href="/browse/PAY-610">PAY-610</a>.</p>
+<p>Card tokens live in the Card Vault (formerly Vault) component; SOAP calls go through the Payments Gateway component.</p>
+<p>The retry fix shipped in release 2.5. The Ledger team signs off on reconciliation.</p>
+<p>The Legacy Gateway component is kept for the SOAP adapter.</p>
+`;
+
+export const STORAGE_RENAMED_REFS_FIXED = `
+<h1>Checkout service — integration notes</h1>
+<p>Tracked in <a href="/browse/PAY-610">PAY-610</a>.</p>
+<p>Card tokens live in the Card Vault component; SOAP calls go through the Card Gateway component.</p>
+<p>The retry fix shipped in release 2.5.0.</p>
+`;

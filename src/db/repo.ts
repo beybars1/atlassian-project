@@ -4,6 +4,7 @@
  */
 import type { Finding, PageType } from "../checks/types";
 import type { StoredFact } from "../checks/contradiction";
+import type { JiraNameKind, JiraNameRow } from "../checks/jiraRenamed";
 import type { Fact } from "../llm/extractFacts";
 import { addUsage, emptyUsage, type LlmUsage } from "../llm/cost";
 
@@ -87,12 +88,24 @@ export interface Repo {
   recordBatch(id: string, result: BatchResult): Promise<ScanRun | undefined>;
   /** Runs of a space, newest first. */
   recentRuns(spaceId: string, limit: number): Promise<ScanRun[]>;
+  /** Every name ever seen on a project's components and versions (check 3c, T19a). */
+  jiraNames(projectKey: string): Promise<JiraNameRow[]>;
+  /** Record a refresh: a row per `(project, kind, id, name)`; `firstSeen` is kept, `lastSeen` becomes `seenAt`. */
+  upsertJiraNames(names: JiraNameInput[], seenAt: string): Promise<void>;
+}
+
+export interface JiraNameInput {
+  projectKey: string;
+  kind: JiraNameKind;
+  jiraId: string;
+  name: string;
 }
 
 export class MemoryRepo implements Repo {
   pages = new Map<string, ScannedPage>();
   facts = new Map<string, Fact[]>();
   runs = new Map<string, ScanRun>();
+  jiraNameRows: JiraNameRow[] = [];
   /** Stored findings (open and dismissed) with the page whose scan produced them. */
   private rows: Array<{ id: string; source: string; status: FindingStatus; finding: Finding }> = [];
   private nextId = 1;
@@ -191,6 +204,16 @@ export class MemoryRepo implements Repo {
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id))
       .slice(0, limit)
       .map((r) => ({ ...r, usage: { fast: { ...r.usage.fast }, smart: { ...r.usage.smart } } }));
+  }
+  async jiraNames(projectKey: string) {
+    return this.jiraNameRows.filter((r) => r.projectKey === projectKey).map((r) => ({ ...r }));
+  }
+  async upsertJiraNames(names: JiraNameInput[], seenAt: string) {
+    for (const n of names) {
+      const row = this.jiraNameRows.find((r) => r.projectKey === n.projectKey && r.kind === n.kind && r.jiraId === n.jiraId && r.name === n.name);
+      if (row) row.lastSeen = seenAt;
+      else this.jiraNameRows.push({ ...n, firstSeen: seenAt, lastSeen: seenAt });
+    }
   }
 }
 

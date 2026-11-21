@@ -85,7 +85,8 @@ const RELEASE_WORDS =
 const CLAUSE_BREAK = /[.;:!?]\s|\n/g;
 const FIRST_CLAUSE_BREAK = /[.;:!?]\s|\n/;
 
-function usable(name: string): boolean {
+/** Names shorter than this are not searched for: too many ordinary words. Shared with check 3c (T19a). */
+export function usable(name: string): boolean {
   return name.trim().length >= 3;
 }
 
@@ -93,7 +94,8 @@ function escape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function componentMentioned(text: string, name: string): boolean {
+/** Whether the page mentions a component name with enough context to be sure (see the header). */
+export function componentMentioned(text: string, name: string): boolean {
   const distinctive = /\s/.test(name.trim()) || /\d/.test(name);
   const re = new RegExp(`(?<![A-Za-z0-9])${escape(name)}(?![A-Za-z0-9])`, distinctive ? "gi" : "g");
   for (const m of text.matchAll(re)) {
@@ -104,8 +106,8 @@ function componentMentioned(text: string, name: string): boolean {
   return false;
 }
 
-/** Index of the first mention that has release context, or undefined. */
-function versionMention(text: string, name: string): number | undefined {
+/** Index of the first mention that has release context, or undefined. Shared with check 3c (T19a). */
+export function versionMention(text: string, name: string): number | undefined {
   const re = new RegExp(`(?<![A-Za-z0-9.])(v)?${escape(name)}(?![A-Za-z0-9]|\\.\\d)`, "g");
   for (const m of text.matchAll(re)) {
     const idx = m.index ?? 0;
