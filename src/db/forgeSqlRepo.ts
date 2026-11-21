@@ -229,6 +229,22 @@ export class ForgeSqlRepo implements Repo {
       .map(({ page, findings }) => ({ page, findings }));
   }
 
+  async findingsOfPage(pageId: string, status: FindingStatus) {
+    const rows = await sql
+      .prepare<{ id: number; check_code: string; severity: string; evidence: string; suggestion: string; related_page_id: string | null; related_page_title: string | null }>(
+        "SELECT id, check_code, severity, evidence, suggestion, related_page_id, related_page_title FROM findings WHERE page_id = ? AND status = ? ORDER BY id",
+      )
+      .bindParams(pageId, status)
+      .execute();
+    return rows.rows.map((r): StoredFinding => {
+      const rel = related(r.related_page_id, r.related_page_title);
+      return {
+        id: String(r.id), status, pageId, check: r.check_code as Finding["check"], severity: r.severity as Finding["severity"],
+        evidence: r.evidence, suggestion: r.suggestion, ...(rel ? { related: rel } : {}),
+      };
+    });
+  }
+
   async startRun(run: ScanRun) {
     await sql
       .prepare("INSERT INTO scan_runs (id, space_id, started_at, pages_seen, pages_scanned, fast_in, fast_out, smart_in, smart_out) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")

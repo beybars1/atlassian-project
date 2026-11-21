@@ -72,6 +72,8 @@ export interface Repo {
   setFindingStatus(id: string, status: FindingStatus): Promise<boolean>;
   /** Pages of a space with their findings of one status, worst pages first. */
   findingsByStatus(spaceId: string, status: FindingStatus, limit: number): Promise<FindingsRow[]>;
+  /** Findings of one status on one page, in storage order (byline chip, T19). */
+  findingsOfPage(pageId: string, status: FindingStatus): Promise<StoredFinding[]>;
   /** Replace the stored facts of a page (check 6). */
   replaceFacts(pageId: string, facts: Fact[]): Promise<void>;
   /** Stored facts of one page (valid for `ScannedPage.factsVersion`). */
@@ -143,6 +145,9 @@ export class MemoryRepo implements Repo {
       rows.push({ page: p, findings: f, score: severityScore(f) });
     }
     return rows.sort((a, b) => b.score - a.score).slice(0, limit).map(({ page, findings }) => ({ page, findings }));
+  }
+  async findingsOfPage(pageId: string, status: FindingStatus) {
+    return this.rows.filter((r) => r.status === status && r.finding.pageId === pageId).map((r) => ({ ...r.finding, id: r.id, status: r.status }));
   }
   async replaceFacts(pageId: string, facts: Fact[]) {
     this.facts.set(pageId, facts);

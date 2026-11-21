@@ -10,6 +10,7 @@ import type { FindingStatus } from "./db/repo";
 import { forgeLlmClient } from "./llm/client";
 import { parseStaleThresholds } from "./checks/staleByType";
 import { costRows } from "./ui/costReport";
+import { bylinePageIdFromContext, bylineStatus, contentIdFromPayload } from "./ui/bylineSummary";
 import { runNightly, type SpaceConfig } from "./triggers/nightly";
 import { scanBatch as scanBatchImpl } from "./workers/scanBatch";
 import type { ScanBatchEvent } from "./scan/orchestrate";
@@ -73,3 +74,28 @@ ui.define("runNow", async () => {
   return runNightly(repo);
 });
 export const resolver = ui.getDefinitions();
+
+// Byline item (T19). Its own resolver, read-only: every page viewer reaches it, and the dashboard's
+// resolver has write methods (spaces, thresholds, "Scan now") that must stay out of their reach.
+const bylineUi = new Resolver();
+bylineUi.define("bylineStatus", async ({ context }) => {
+  // The page id comes from the trusted resolver context (the page the byline is rendered on), never
+  // from the payload: a payload id would let any viewer read another page's findings (PR #9 review).
+  const pageId = bylinePageIdFromContext({ context });
+  if (!pageId) throw new Error("bylineStatus: no content id in the resolver context");
+  await migrate();
+  return bylineStatus(repo, pageId);
+});
+export const byline = bylineUi.getDefinitions();
+
+/** `dynamicProperties` of the byline item: the chip's title and tooltip for the page being viewed. */
+export async function bylineProperties(payload: unknown) {
+  const pageId = contentIdFromPayload(payload);
+  if (!pageId) {
+    console.warn("bylineProperties: no content id in payload", JSON.stringify(Object.keys((payload as object) ?? {})));
+    return { title: "WikiVerify", tooltip: "WikiVerify could not identify this page." };
+  }
+  await migrate();
+  const { summary } = await bylineStatus(repo, pageId);
+  return { title: summary.title, tooltip: summary.tooltip };
+}

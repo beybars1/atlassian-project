@@ -34,7 +34,8 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 - [ ] T17a Measure the cost of a full scan on the seeded space (dashboard "Scan cost" table, log line `cost alert` in the worker); write the $ per 2,000 pages into DEVLOG and, if over $10, cut the Haiku prompt (page text cap, facts cap) before anything else. needs: T07.
 - [ ] T17b `scan_runs` row per day: a second `startRun` for the same `<date>:<space>` id (double-fired trigger, or "Scan now" on the dashboard after the nightly) hits the primary key and throws in Forge SQL, so the manual run never enqueues. Decide: reuse the row (and accept double-counted pages) or key manual runs separately. needs: T06.
 - [x] T18 Dashboard v1: per-space tabs, severity filter, "dismiss finding" (status → dismissed, persists across scans), link to page. needs: T16. *(done 2026-11-18 → `src/ui/dashboardRows.ts`, `Repo.setFindingStatus` / `findingsByStatus`; a dismissal holds while the scan reproduces the identical finding and is dropped when it stops; "Show dismissed" + Restore; relative page links, no site URL; 10 tests)*
-- [ ] T19 Byline item (`confluence:contentBylineItem`): "✓ verified" / "⚠ 2 issues" chip on each page. needs: T18. *(adds a module → check `forge lint`, major version)*
+- [x] T19 Byline item (`confluence:contentBylineItem`): "✓ verified" / "⚠ 2 issues" chip on each page. needs: T18. *(adds a module → check `forge lint`, major version)* *(done 2026-11-19 → `src/ui/bylineSummary.ts`, `src/ui/byline/index.tsx`, `Repo.findingsOfPage`; chip via `dynamicProperties`, popup lists the open findings; unscanned pages show a neutral "WikiVerify", never "verified"; 9 tests)*
+- [ ] T19c Verify the byline on the dev site: the `dynamicProperties` payload shape (`extension.content.id`), that the chip text updates after a scan, the popup's `useProductContext().extension.content.id`, and `forge lint` on the new module. needs: T06.
 
 ## Week 4 — listing (1–7 Dec)
 

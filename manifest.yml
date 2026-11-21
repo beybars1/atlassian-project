@@ -24,6 +24,23 @@ modules:
       timeoutSeconds: 600
     - key: resolver
       handler: index.resolver
+    - key: byline
+      handler: index.byline
+    - key: byline-properties
+      handler: index.bylineProperties
+
+  # T19: "✓ verified" / "⚠ 2 issues" chip under every page title. Text only — a dynamic icon would
+  # need an external image URL, and this app has no external permissions.
+  confluence:contentBylineItem:
+    - key: wikiverify-byline
+      title: WikiVerify
+      tooltip: WikiVerify nightly check of this page
+      resource: byline
+      resolver:
+        function: byline
+      render: native
+      dynamicProperties:
+        function: byline-properties
 
   confluence:globalPage:
     - key: wikiverify-dashboard
@@ -46,6 +63,8 @@ modules:
 resources:
   - key: dashboard
     path: src/ui/dashboard/index.tsx
+  - key: byline
+    path: src/ui/byline/index.tsx
 
 permissions:
   scopes:
