@@ -6,8 +6,9 @@
 import sql, { migrationRunner, type UpdateQueryResponse } from "@forge/sql";
 import type { Finding, PageType } from "../checks/types";
 import type { StoredFact } from "../checks/contradiction";
+import type { JiraNameKind, JiraNameRow } from "../checks/jiraRenamed";
 import type { Fact } from "../llm/extractFacts";
-import { sameFinding, severityScore, type BatchResult, type FindingStatus, type Repo, type ScannedPage, type ScanRun, type StoredFinding } from "./repo";
+import { sameFinding, severityScore, type BatchResult, type FindingStatus, type JiraNameInput, type Repo, type ScannedPage, type ScanRun, type StoredFinding } from "./repo";
 
 const SCHEMA = [
   [
@@ -40,6 +41,11 @@ const SCHEMA = [
   [
     "v005_scan_runs_tokens",
     `ALTER TABLE scan_runs ADD COLUMN fast_in BIGINT NOT NULL DEFAULT 0, ADD COLUMN fast_out BIGINT NOT NULL DEFAULT 0, ADD COLUMN smart_in BIGINT NOT NULL DEFAULT 0, ADD COLUMN smart_out BIGINT NOT NULL DEFAULT 0, ADD INDEX idx_scan_runs_space (space_id, started_at)`,
+  ],
+  // T19a: the app's own changelog of Jira component / version names — every name ever seen per id.
+  [
+    "v006_jira_names",
+    `CREATE TABLE IF NOT EXISTS jira_names (project_key VARCHAR(32) NOT NULL, kind VARCHAR(16) NOT NULL, jira_id VARCHAR(32) NOT NULL, name VARCHAR(255) NOT NULL, first_seen DATETIME NOT NULL, last_seen DATETIME NOT NULL, PRIMARY KEY (project_key, kind, jira_id, name))`,
   ],
 ] as const;
 
@@ -272,6 +278,30 @@ export class ForgeSqlRepo implements Repo {
       .bindParams(spaceId, limit)
       .execute();
     return rows.rows.map(toRun);
+  }
+
+  async jiraNames(projectKey: string) {
+    const rows = await sql
+      .prepare<{ project_key: string; kind: string; jira_id: string; name: string; first_seen: string; last_seen: string }>(
+        "SELECT project_key, kind, jira_id, name, first_seen, last_seen FROM jira_names WHERE project_key = ? ORDER BY first_seen, kind, jira_id",
+      )
+      .bindParams(projectKey)
+      .execute();
+    return rows.rows.map(
+      (r): JiraNameRow => ({ projectKey: r.project_key, kind: r.kind as JiraNameKind, jiraId: r.jira_id, name: r.name, firstSeen: r.first_seen, lastSeen: r.last_seen }),
+    );
+  }
+
+  async upsertJiraNames(names: JiraNameInput[], seenAt: string) {
+    const at = dt(seenAt);
+    for (const n of names) {
+      await sql
+        .prepare(
+          "INSERT INTO jira_names (project_key, kind, jira_id, name, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE last_seen = VALUES(last_seen)",
+        )
+        .bindParams(n.projectKey, n.kind, n.jiraId, n.name.slice(0, 255), at, at)
+        .execute();
+    }
   }
 }
 

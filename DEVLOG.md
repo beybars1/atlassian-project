@@ -4,6 +4,27 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-22 (Sun, night) — T19a rename propagation
+
+**Done**
+- `src/checks/jiraRenamed.ts` — check 3c, finding code `JIRA_RENAMED`: a Jira component or version was renamed and the page still uses the old name. Project context comes only from issue keys on the page (as in 3b); old names are matched with 3b's rules (`componentMentioned` / `versionMention`, now exported); a page that already mentions the new name is left alone ("Card Vault (formerly Vault)"); an old name that is still the name of something else in the project, a case-only change, or a name under 3 chars is never reported. Component → medium, version → low, max 5 per page. The suggestion is the concrete fix: `Replace "Payments Gateway" with "Card Gateway".` — the first finding whose suggestion is directly applicable (T19b / T25 territory).
+- The task text says "Jira changelog of component/version names". There is none: Jira REST has no history for component / version objects (issue changelogs record field changes on *issues*, and a rename does not touch them). So the app keeps its own changelog: `jira_names` table (migration `v006_jira_names`), one row per `(project, kind, jira_id, name)` with `first_seen` / `last_seen`. Component and version ids are stable across renames, so an id carrying a new name is a rename, dated by the new name's `first_seen`; its earlier rows are the names pages must drop. `detectRenames` is pure; renames older than 180 days (`RENAME_WINDOW_DAYS`) are forgotten; a project seen for the first time yields nothing.
+- Worker: `renameSource` refreshes each cited project once per batch (`refreshJiraNames`: components + versions → diff against the snapshot → upsert). An empty list from a client (also what it returns on an error) is not written, so a Jira outage never turns into "every name disappeared". A failing refresh means no renames known tonight, never a wrong finding. `Repo.jiraNames` / `upsertJiraNames` in memory + Forge SQL (`ON DUPLICATE KEY UPDATE last_seen`).
+- Fixture `STORAGE_RENAMED_REFS` (2 planted faults, 3 planted non-faults) + `_FIXED`. 13 new tests: the diff (first sight, fresh rename, rename chain keeps its date, window, name reuse / case-only / short names, other project / vanished id), the check, the repo upsert, and the worker over three nights (learn → rename found on the edited page → cleared when fixed; one refresh per project per batch). 152 total green; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Learned**
+- Without a Jira-side history, the first nightly after install is a pure learning run: a rename that happened *before* the app was installed is invisible. That is the honest limit of a no-egress, read-only app; the 180-day window in the task is the retention of the app's own records, not a lookback into Jira.
+- Incremental scanning and rename propagation pull in opposite directions: the page most likely to carry the old name is the one nobody edited since the rename, and that page is never rescanned. The check works tonight for pages that change; the sweep over unchanged pages needs the nightly to know which pages cite which projects — split into T19d rather than squeezed in (it touches `pages`, the orchestrator and the trigger).
+- A name match is only as good as 3b's rules: "release 2.5" is a hit, "2.5.1" is not, "Payments Gateways" is not. Reusing the same functions means a rename finding is never *less* conservative than a drift finding on the same page.
+
+**Next**
+- Agent (unblocked, in order): T19b suggested-fix preview (needs T16), T19d rescan on rename (needs T19a — this PR). T21 is open as PR #10 awaiting review.
+- Owner: T06 verification on the dev site still gates T07 / T09 / T13 / T15a / T16b / T17a / T17b / T19c; migration v006 should be checked there too; T12a scope decision.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-19 (Thu, night) — T19 byline item
 
 **Done**

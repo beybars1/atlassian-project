@@ -44,7 +44,8 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 - [ ] T22 `forge eligibility` reports Runs on Atlassian; data residency declared; no egress. needs: T19.
 - [ ] T23 [owner] Submit free listing.
 
-- [ ] T19a Rename propagation check (approved 2026-11-12): Jira component/version renamed → list pages still using the old name. Uses Jira changelog of component/version names (last 180 days) + text search across scanned pages. needs: T11.
+- [x] T19a Rename propagation check (approved 2026-11-12): Jira component/version renamed → list pages still using the old name. Uses Jira changelog of component/version names (last 180 days) + text search across scanned pages. needs: T11. *(done 2026-11-22 → `src/checks/jiraRenamed.ts`, `jira_names` snapshot (migration v006); Jira has no rename changelog, so the app keeps its own by stable id; `JIRA_RENAMED` finding with the concrete "old → new" fix; 13 tests. Pages unchanged since the rename are only reached by T19d)*
+- [ ] T19d Rescan on rename: a page that nobody edited since a rename is never rescanned by the incremental nightly, so T19a only catches it on its next edit. Store the project keys a page cites (`pages.project_keys`), and let the nightly add every scanned page citing a project with a rename newer than its `scanned_at` to the batches. needs: T19a.
 - [ ] T19b Suggested-fix preview in free tier (approved 2026-11-12): Sonnet drafts the fix text for findings of checks 3, 4, 6 (`suggestion` field becomes concrete: old → new). Read-only; apply stays in T25. needs: T16.
 
 ## Later (not before week 5)

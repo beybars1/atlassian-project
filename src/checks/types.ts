@@ -11,7 +11,9 @@ export type CheckCode =
   | "JIRA_REF_DRIFT"
   | "PLACEHOLDER"
   | "STALE_BY_TYPE"
-  | "CONTRADICTION";
+  | "CONTRADICTION"
+  /** T19a: a Jira component / version was renamed and the page still uses the old name. */
+  | "JIRA_RENAMED";
 
 export interface Finding {
   pageId: string;

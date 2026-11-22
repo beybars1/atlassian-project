@@ -57,3 +57,15 @@ CREATE TABLE IF NOT EXISTS scan_runs (
   smart_out     BIGINT      NOT NULL DEFAULT 0,
   INDEX idx_scan_runs_space (space_id, started_at)
 );
+
+-- v006 (T19a): the app's own changelog of Jira component / version names. One row per name ever seen
+-- on an id; an id carrying a new name is a rename, its earlier rows are the names pages must drop.
+CREATE TABLE IF NOT EXISTS jira_names (
+  project_key VARCHAR(32)  NOT NULL,
+  kind        VARCHAR(16)  NOT NULL,  -- 'component' | 'version'
+  jira_id     VARCHAR(32)  NOT NULL,
+  name        VARCHAR(255) NOT NULL,
+  first_seen  DATETIME     NOT NULL,  -- refresh that first saw this name on this id (= rename date for later names)
+  last_seen   DATETIME     NOT NULL,
+  PRIMARY KEY (project_key, kind, jira_id, name)
+);
