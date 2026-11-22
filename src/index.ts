@@ -23,7 +23,7 @@ const staleThresholds = async () => parseStaleThresholds(await kvs.get("config.s
 
 export async function nightly() {
   await migrate();
-  const result = await runNightly(repo);
+  const result = await runNightly(repo, forgeClients());
   console.log("nightly", JSON.stringify(result));
 }
 
@@ -71,7 +71,7 @@ ui.define("recentRuns", async ({ payload }) => {
 });
 ui.define("runNow", async () => {
   await migrate();
-  return runNightly(repo);
+  return runNightly(repo, forgeClients());
 });
 export const resolver = ui.getDefinitions();
 
