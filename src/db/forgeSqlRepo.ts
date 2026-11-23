@@ -8,7 +8,7 @@ import type { Finding, PageType } from "../checks/types";
 import type { StoredFact } from "../checks/contradiction";
 import type { JiraNameKind, JiraNameRow } from "../checks/jiraRenamed";
 import type { Fact } from "../llm/extractFacts";
-import { sameFinding, severityScore, type BatchResult, type FindingStatus, type JiraNameInput, type Repo, type ScannedPage, type ScanRun, type StoredFinding } from "./repo";
+import { sameFinding, severityScore, type BatchResult, type CitedProjects, type FindingStatus, type JiraNameInput, type Repo, type ScannedPage, type ScanRun, type StoredFinding } from "./repo";
 
 const SCHEMA = [
   [
@@ -47,11 +47,24 @@ const SCHEMA = [
     "v006_jira_names",
     `CREATE TABLE IF NOT EXISTS jira_names (project_key VARCHAR(32) NOT NULL, kind VARCHAR(16) NOT NULL, jira_id VARCHAR(32) NOT NULL, name VARCHAR(255) NOT NULL, first_seen DATETIME NOT NULL, last_seen DATETIME NOT NULL, PRIMARY KEY (project_key, kind, jira_id, name))`,
   ],
+  // T19d: Jira projects a page cites, so the nightly can rescan it after a rename in one of them.
+  ["v007_pages_project_keys", `ALTER TABLE pages ADD COLUMN project_keys VARCHAR(255) NULL`],
 ] as const;
 
 /** `issue_keys` column ↔ `Fact.issueKeys` (comma-separated; keys never contain commas). */
 const packKeys = (keys?: string[]) => (keys?.length ? keys.join(",").slice(0, 255) : null);
 const unpackKeys = (col: string | null): string[] | undefined => (col ? col.split(",").filter(Boolean) : undefined);
+/** `pages.project_keys` ↔ `ScannedPage.projectKeys`: comma-separated, cut at a whole key so a truncated list never holds a half key. */
+const packProjects = (keys?: string[]): string | null => {
+  if (!keys) return null;
+  let out = "";
+  for (const k of keys) {
+    const next = out ? `${out},${k}` : k;
+    if (next.length > 255) break;
+    out = next;
+  }
+  return out;
+};
 const related = (id: string | null, title: string | null): Finding["related"] => (id ? { pageId: id, pageTitle: title ?? "" } : undefined);
 
 export async function migrate(): Promise<void> {
@@ -79,8 +92,8 @@ export class ForgeSqlRepo implements Repo {
     const rows = await sql
       .prepare<{
         page_id: string; space_id: string; title: string; version: number; owner_id: string | null;
-        last_modified: string; scanned_at: string; page_type: string | null; facts_version: number | null;
-      }>("SELECT page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type, facts_version FROM pages WHERE page_id = ?")
+        last_modified: string; scanned_at: string; page_type: string | null; facts_version: number | null; project_keys: string | null;
+      }>("SELECT page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type, facts_version, project_keys FROM pages WHERE page_id = ?")
       .bindParams(pageId)
       .execute();
     const r = rows.rows[0];
@@ -89,20 +102,32 @@ export class ForgeSqlRepo implements Repo {
       pageId: r.page_id, spaceId: r.space_id, title: r.title, version: r.version, ownerId: r.owner_id ?? undefined,
       lastModified: r.last_modified, scannedAt: r.scanned_at, pageType: (r.page_type as PageType | null) ?? undefined,
       factsVersion: r.facts_version ?? undefined,
+      // Stored "" (cites nothing) and NULL (scanned before v007) both read as "no projects known".
+      projectKeys: r.project_keys === null ? undefined : (unpackKeys(r.project_keys) ?? []),
     };
   }
 
   async upsertPage(p: ScannedPage) {
     await sql
       .prepare(
-        `INSERT INTO pages (page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type, facts_version)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO pages (page_id, space_id, title, version, owner_id, last_modified, scanned_at, page_type, facts_version, project_keys)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE title = VALUES(title), version = VALUES(version), owner_id = VALUES(owner_id),
            last_modified = VALUES(last_modified), scanned_at = VALUES(scanned_at), page_type = VALUES(page_type),
-           facts_version = VALUES(facts_version)`,
+           facts_version = VALUES(facts_version), project_keys = VALUES(project_keys)`,
       )
-      .bindParams(p.pageId, p.spaceId, p.title, p.version, p.ownerId ?? null, dt(p.lastModified), dt(p.scannedAt), p.pageType ?? null, p.factsVersion ?? null)
+      .bindParams(p.pageId, p.spaceId, p.title, p.version, p.ownerId ?? null, dt(p.lastModified), dt(p.scannedAt), p.pageType ?? null, p.factsVersion ?? null, packProjects(p.projectKeys))
       .execute();
+  }
+
+  async pagesCitingProjects(spaceId: string) {
+    const rows = await sql
+      .prepare<{ page_id: string; scanned_at: string; project_keys: string }>(
+        "SELECT page_id, scanned_at, project_keys FROM pages WHERE space_id = ? AND project_keys IS NOT NULL AND project_keys <> ''",
+      )
+      .bindParams(spaceId)
+      .execute();
+    return rows.rows.map((r): CitedProjects => ({ pageId: r.page_id, scannedAt: r.scanned_at, projectKeys: unpackKeys(r.project_keys) ?? [] }));
   }
 
   async replaceFindings(pageId: string, findings: Finding[]) {

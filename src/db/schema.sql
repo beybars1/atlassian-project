@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS pages (
   scanned_at    DATETIME     NOT NULL,
   page_type     VARCHAR(16)  NULL,       -- v002 (T15): check 5 classification, valid for `version`
   facts_version INT          NULL,       -- v003 (T16): page version whose facts are in `facts`
+  project_keys  VARCHAR(255) NULL,       -- v007 (T19d): Jira projects cited on the page, comma-separated ('' = none; NULL = scanned before v007)
   INDEX idx_pages_space (space_id)
 );
 

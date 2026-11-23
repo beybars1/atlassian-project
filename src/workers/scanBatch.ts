@@ -3,7 +3,7 @@
  */
 import { runChecks, V0_CHECKS } from "../checks";
 import { contradictionFindings } from "../checks/contradiction";
-import { detectRenames, makeJiraRenamed, type CurrentJiraName, type JiraRename, type RenameSource } from "../checks/jiraRenamed";
+import { makeJiraRenamed, type JiraRename, type RenameSource } from "../checks/jiraRenamed";
 import { makeStaleByType, type StaleThresholds } from "../checks/staleByType";
 import type { Clients, PageType } from "../checks/types";
 import type { Repo, ScannedPage } from "../db/repo";
@@ -14,6 +14,7 @@ import type { LlmClient } from "../llm/client";
 import { addUsage, costAlert, emptyUsage, usageCostUsd, type LlmUsage } from "../llm/cost";
 import { extractFacts, MIN_EXTRACT_CHARS, type Fact } from "../llm/extractFacts";
 import type { ScanBatchEvent } from "../scan/orchestrate";
+import { projectKeysOf, refreshJiraNames } from "../scan/renameRescan";
 
 export interface ScanDeps {
   /** Haiku classifier for check 5 and fact extraction + Sonnet adjudication for check 6. Without it, only labels / titles decide the page type and check 6 is off. */
@@ -58,6 +59,7 @@ export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clie
         scannedAt: clients.now().toISOString(),
         pageType: page.pageType,
         factsVersion: facts ? page.version : undefined,
+        projectKeys: projectKeysOf(page.issueKeys),
       };
       if (facts?.fresh) await repo.replaceFacts(page.id, facts.facts);
       await repo.upsertPage(stored);
@@ -81,7 +83,8 @@ export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clie
 
 /**
  * Check 3c's rename source, one refresh per project per batch: Jira's current component / version
- * names go into the `jira_names` snapshot and are diffed against what the snapshot held before.
+ * names go into the `jira_names` snapshot and are diffed against what the snapshot held before
+ * (`refreshJiraNames`, shared with the nightly's rescan-on-rename, T19d).
  * Any failure means "no renames known" for that project tonight — never a wrong finding.
  */
 function renameSource(repo: Repo, clients: Clients): RenameSource {
@@ -97,21 +100,6 @@ function renameSource(repo: Repo, clients: Clients): RenameSource {
     }
     return p;
   };
-}
-
-export async function refreshJiraNames(repo: Repo, clients: Clients, project: string): Promise<JiraRename[]> {
-  const [components, versions] = await Promise.all([clients.jira.getComponents(project), clients.jira.getVersions(project)]);
-  // An empty list is also what the client returns on an error, so an empty kind is simply not refreshed.
-  const current: CurrentJiraName[] = [
-    ...components.map((c): CurrentJiraName => ({ kind: "component", id: c.id, name: c.name })),
-    ...versions.map((v): CurrentJiraName => ({ kind: "version", id: v.id, name: v.name })),
-  ];
-  if (current.length === 0) return [];
-  const seen = await repo.jiraNames(project);
-  const now = clients.now();
-  const renames = detectRenames(project, seen, current, now);
-  await repo.upsertJiraNames(current.map((c) => ({ projectKey: project, kind: c.kind, jiraId: c.id, name: c.name })), now.toISOString());
-  return renames;
 }
 
 /**

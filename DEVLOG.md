@@ -4,6 +4,28 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-23 (Mon, night) — T19d rescan on rename
+
+**Done**
+- `pages.project_keys` (migration `v007_pages_project_keys`, comma-separated, cut at a whole key at 255 chars): the worker stores the distinct project prefixes of the page's issue keys with every scan (`projectKeysOf`). `''` = cites nothing, `NULL` = scanned before v007 (those pages join on their next edit, as before). `Repo.pagesCitingProjects(spaceId)` lists `(pageId, scannedAt, projectKeys)` for the pages that cite anything — memory + Forge SQL.
+- `src/scan/renameRescan.ts` (Forge-free, repo + clients injected). `refreshJiraNames` moved here from the worker and is now shared: the nightly refreshes the `jira_names` snapshot of every project cited in the space (∩ the site's known projects, one components + one versions call per project) *before* the diff, so a rename is discovered the night it happens even when no edited page cites that project. `pagesNeedingRescan` (pure): a page whose cited project has a rename newer than the page's `scanned_at`. `renameRescanPageIds` never throws — a failing refresh means no rescans tonight, the regular diff always goes ahead.
+- `runNightly(repo, clients)`: `addRescans(heads, changed, rescanIds)` appends current pages marked for rescan that the version diff did not already pick (deleted pages are skipped); logs `N page(s) rescanned after a Jira rename` per space and returns `rescans` in the result. `index.ts` passes `forgeClients()`.
+- `storedDateMs` in `repo.ts`: a zone-less SQL `DATETIME` ("2026-11-20 02:00:00") is read as UTC. `Date.parse` reads it as *local* time, and the sandbox runs at UTC+5 — the first version of the test failed exactly there. Only the new code uses it; `detectRenames` still uses `new Date(first_seen)` against a 180-day window, where a few hours cannot matter.
+- 11 new tests (`test/renameRescan.test.ts`): project prefixes, the pure selection (incl. SQL-style vs ISO timestamps), `addRescans`, the repo method, the three-night end-to-end (night 1 learns and stores projects; night 2 the nightly finds the rename and queues the *unedited* page, the worker produces `JIRA_RENAMED`; night 3 nothing is re-queued, the finding clears when the page is fixed), one Jira call per cited project with unknown projects ignored, and a failing refresh. 163 total green under both `TZ=Asia/Almaty` and `TZ=UTC`; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Learned**
+- A rename that happens the same night as the nightly is dated by the refresh (`first_seen` = now), so every page citing the project is rescanned once — tonight — and then `scanned_at > renamedAt` keeps them out. The comparison is strict, which is the conservative side: a page scanned in the same second as the refresh is not queued again.
+- Rescans go through the full worker, not just check 3c: `replaceFindings` replaces everything a page's scan produced, so a 3c-only pass would wipe the other findings. Haiku is cached per version (page type, facts), but check 6 re-adjudicates the page's conflicts with Sonnet. A rename is rare and the pages are only those citing the project; if T17a shows this matters, the fix is a repo method that replaces one check's findings — not before.
+- Pages scanned before v007 have no project list and are not rescanned until their next edit. Acceptable for a pre-launch app; a one-off backfill would need a full rescan anyway.
+
+**Next**
+- Agent (unblocked, in order): T19b suggested-fix preview (needs T16). T21 is open as PR #10 awaiting review.
+- Owner: T06 verification on the dev site still gates T07 / T09 / T13 / T15a / T16b / T17a / T17b / T19c; migrations v006 and v007 and the `project_keys <> ''` / `UPDATE … VALUES()` SQL should be checked there too; T12a scope decision.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-22 (Sun, night) — T19a rename propagation
 
 **Done**

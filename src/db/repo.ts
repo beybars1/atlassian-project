@@ -20,6 +20,19 @@ export interface ScannedPage {
   pageType?: PageType;
   /** Page version whose facts are stored (check 6, T16); absent when extraction has not run or failed. */
   factsVersion?: number;
+  /**
+   * Jira project keys cited on the page (prefixes of its issue keys), as of `version` (T19d). The
+   * nightly rescans the page when one of them has a rename newer than `scannedAt`. Absent for rows
+   * scanned before this column existed — those pages join on their next edit.
+   */
+  projectKeys?: string[];
+}
+
+/** A page that cites Jira projects, with the scan date the nightly compares rename dates against (T19d). */
+export interface CitedProjects {
+  pageId: string;
+  scannedAt: string;
+  projectKeys: string[];
 }
 
 /** One nightly run of one space (`<date>:<spaceId>`); batches add to it as they finish (T17). */
@@ -61,6 +74,8 @@ export interface Repo {
   /** Last stored state of one page (version + cached page type); undefined if never scanned. */
   getPage(pageId: string): Promise<ScannedPage | undefined>;
   upsertPage(p: ScannedPage): Promise<void>;
+  /** Scanned pages of a space that cite at least one Jira project (T19d). */
+  pagesCitingProjects(spaceId: string): Promise<CitedProjects[]>;
   /**
    * Replace everything the scan of `pageId` produced. Findings may target other pages (check 6
    * puts a contradiction on the page judged outdated); they are attributed to `pageId` as their
@@ -129,6 +144,13 @@ export class MemoryRepo implements Repo {
   }
   async upsertPage(p: ScannedPage) {
     this.pages.set(p.pageId, p);
+  }
+  async pagesCitingProjects(spaceId: string) {
+    const out: CitedProjects[] = [];
+    for (const p of this.pages.values()) {
+      if (p.spaceId === spaceId && p.projectKeys?.length) out.push({ pageId: p.pageId, scannedAt: p.scannedAt, projectKeys: [...p.projectKeys] });
+    }
+    return out;
   }
   async replaceFindings(pageId: string, findings: Finding[]) {
     const mine = (r: { source: string; finding: Finding }) => r.source === pageId || r.finding.pageId === pageId;
@@ -215,6 +237,16 @@ export class MemoryRepo implements Repo {
       else this.jiraNameRows.push({ ...n, firstSeen: seenAt, lastSeen: seenAt });
     }
   }
+}
+
+/**
+ * Milliseconds of a stored date. Forge SQL hands DATETIME back without a zone ("2026-11-20 02:00:00",
+ * written as UTC by `forgeSqlRepo`), which `Date.parse` would read as local time; ISO strings with a
+ * zone parse as they are. NaN when unparsable.
+ */
+export function storedDateMs(s: string): number {
+  const bare = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s);
+  return Date.parse(bare ? `${s.replace(" ", "T")}Z` : s);
 }
 
 /** Page ranking on the dashboard: worst pages first. */
