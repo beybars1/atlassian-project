@@ -40,7 +40,7 @@ Legend: `[owner]` = only the human can do it. Everything else is for the agent.
 ## Week 4 — listing (1–7 Dec)
 
 - [ ] T20 [owner] Privacy & security questionnaire, support URL, EULA, app name decision (naming rules check).
-- [ ] T21 Listing copy from `notes/phrases.md`: title, tagline, 3 highlights, 5 screenshots (agent drafts; owner uploads). needs: T08, T18.
+- [x] T21 Listing copy from `notes/phrases.md`: title, tagline, 3 highlights, 5 screenshots (agent drafts; owner uploads). needs: T08, T18. *(done 2026-11-21 → `notes/listing.md`: name options, tagline, summary, more details, 3 highlights, 5 screenshot specs with captions, all within the Marketplace field limits; screenshots themselves need the seeded dev site — T07)*
 - [ ] T22 `forge eligibility` reports Runs on Atlassian; data residency declared; no egress. needs: T19.
 - [ ] T23 [owner] Submit free listing.
 
