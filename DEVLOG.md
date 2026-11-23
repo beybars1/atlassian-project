@@ -4,6 +4,29 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-24 (Tue, night) — T19b suggested-fix preview
+
+**Done**
+- `src/llm/suggestFix.ts` (check 8, pure, LLM injected): `suggestFix(llm, page, finding)` asks Sonnet (tool `propose_fix`: `old_text`, `new_text`, `confidence`, `note`) for the one smallest edit that fixes a finding of check 3 (`JIRA_REF_DRIFT`), 4 (`PLACEHOLDER`) or 6 (`CONTRADICTION`). The model gets the finding, the generic advice and `excerptsFor(text, evidence)`: a window of ±500 chars around every quoted string and issue key in the evidence that can be located on the page (whitespace-insensitively — check 4's snippets are collapsed), merged, with cuts marked; the head of the page when nothing is found. `JIRA_RENAMED` (3c) is already concrete and is left alone; checks 1, 2, 5 have no text to edit.
+- A draft survives only when `confidence` is `high` and `validFix` holds: the old text (trimmed) is 3–400 chars, occurs on the page **exactly once** (an apply in T25 must be unambiguous), and the replacement is ≤ 600 chars and different; an empty replacement is a deletion. The suggestion then reads `Replace "old" with "new".` — the exact shape 3c produces — or `Remove "old".`. Anything else keeps the generic suggestion: the finding itself never depends on the draft.
+- `addFixPreviews`: eligible findings of the scanned page, worst severity first, at most `MAX_FIXES_PER_PAGE = 3` Sonnet calls per page scan; a contradiction that lands on the *other* page gets no draft (that page's text is not at hand — see Learned). A failing call logs and keeps the generic text. Worker: `resolveFixPreviews` runs after check 6 and, when the page version is unchanged since the last scan, passes the stored open + dismissed findings of the page so an identical finding **reuses its stored suggestion without a call** — cheaper, and a dismissed finding keeps its identity (T18 matches on the suggestion text). Tokens go to the Sonnet tier of the run (`cost.test.ts` updated: the second page now also costs one declined draft).
+- No schema change, no manifest change, no UI change: the dashboard and the byline popup already show `suggestion`.
+- 19 new tests (`test/suggestFix.test.ts`): excerpts (located anchors, merged windows, head fallback), validation (unique / verbatim / trimmed / deletion / too long / unchanged), the Sonnet call and every way it declines, selection and cap, reuse of stored suggestions, and the worker over three scans (draft → dismissed finding holds on a same-version replay with no call → redrafted after an edit), plus no LLM / failing LLM / cross-page contradiction. 182 total green under `TZ=Asia/Almaty` and `TZ=UTC`; typecheck + manifest validation green. `forge lint` still needs a logged-in CLI.
+
+**Learned**
+- "Suggestion becomes concrete" and "dismissal persists" pull against each other because T18 keys identity on the suggestion text. Reusing the stored suggestion whenever the page version is unchanged resolves it for replays and rename-rescans; after an edit the finding is drafted again, and if Sonnet (temperature 0) phrases the edit differently the dismissed row is dropped and the finding reappears. Acceptable: the page changed, the admin looks again. Parsing the stored `Replace "…"` back into old/new to check it still applies was the alternative and is more code for a case T18 already treats as "a changed finding is a new finding".
+- A placeholder fix is almost always a deletion ("Last reviewed TBD." → gone) or nothing: the prompt forbids filling a placeholder with a guess, and the test fake declines for check 4 on purpose. The honest fix text for most `TBD`s is "ask the owner", which is what the generic suggestion already says.
+- Cross-page contradictions: when the scan of the *newer* page puts the finding on the outdated one, no draft — the outdated page's text is not at hand and fetching it would be one more Confluence call per conflict. The draft arrives when the outdated page is itself scanned (its next edit, a rename rescan, or when it is the one scanned after the newer page): then check 6 reproduces the finding on it with its text in hand. Good enough for a nightly; T19e decides on the dev site whether the dashboard needs more.
+- Sonnet budget: 3 drafts per page with eligible findings, ≈1.5k tokens in / 100 out each → ≈ $0.006 per page with findings. On a full 2,000-page scan where a third of the pages carry a drift or placeholder finding that is ≈ $4 on top of adjudication — inside the $10 alert, but the first thing to cut if T17a says otherwise.
+
+**Next**
+- Agent: nothing unblocked. T22 (`forge eligibility`) needs a logged-in CLI; T24–T26 are "not before week 5" and T25 adds a scope. The rest needs T06 / T07 on the dev site.
+- Owner: T06 verification on the dev site gates T07 / T09 / T13 / T15a / T16b / T17a / T17b / T19c / T19e; T12a scope decision; T20 listing prerequisites.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-23 (Mon, night) — T19d rescan on rename
 
 **Done**
