@@ -155,6 +155,7 @@ describe("scanBatch cost accounting", () => {
           return { value: { facts } as T, usage: { input: 1500, output: 100 }, model: "claude-haiku-4-5" };
         }
         if (args.tool.name === "judge_conflict") return { value: { outdated_page_id: "12", confidence: "high", reason: "r" } as T, usage: { input: 800, output: 40 }, model: "claude-sonnet-4-5" };
+        if (args.tool.name === "propose_fix") return { value: { old_text: "", new_text: "", confidence: "low" } as T, usage: { input: 600, output: 30 }, model: "claude-sonnet-4-5" }; // T19b: a draft attempt costs Sonnet tokens even when it declines
         throw new Error(`unexpected tool ${args.tool.name}`);
       },
     };
@@ -169,9 +170,9 @@ describe("scanBatch cost accounting", () => {
     await scanBatch({ runId: "2026-11-17", spaceId: "100", pageIds: ["12"] }, repo, world, { llm });
     run = (await repo.recentRuns("100", 1))[0];
     expect(run.pagesScanned).toBe(2);
-    expect(run.usage).toEqual(usage([4000, 220], [800, 40])); // second page: classify + extract + one Sonnet verdict
-    expect(calls.filter((c) => c.startsWith("smart:"))).toEqual(["smart:judge_conflict"]);
-    expect(usageCostUsd(run.usage)).toBeCloseTo(0.004 + 0.0011 + 0.0024 + 0.0006, 9);
+    expect(run.usage).toEqual(usage([4000, 220], [1400, 70])); // second page: classify + extract + one Sonnet verdict + one Sonnet fix draft for the contradiction
+    expect(calls.filter((c) => c.startsWith("smart:"))).toEqual(["smart:judge_conflict", "smart:propose_fix"]);
+    expect(usageCostUsd(run.usage)).toBeCloseTo(0.004 + 0.0011 + 0.0042 + 0.00105, 9);
   });
 
   it("warns once when a run crosses the budget, not on every later batch", async () => {
