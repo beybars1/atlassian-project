@@ -5,7 +5,7 @@ import { runChecks, V0_CHECKS } from "../checks";
 import { contradictionFindings } from "../checks/contradiction";
 import { makeJiraRenamed, type JiraRename, type RenameSource } from "../checks/jiraRenamed";
 import { makeStaleByType, type StaleThresholds } from "../checks/staleByType";
-import type { Clients, PageType } from "../checks/types";
+import type { Clients, Finding, PageType } from "../checks/types";
 import type { Repo, ScannedPage } from "../db/repo";
 import { fetchPage } from "../forge/confluencePages";
 import { adjudicateConflict } from "../llm/adjudicate";
@@ -13,11 +13,12 @@ import { classifyPageType } from "../llm/classifyPage";
 import type { LlmClient } from "../llm/client";
 import { addUsage, costAlert, emptyUsage, usageCostUsd, type LlmUsage } from "../llm/cost";
 import { extractFacts, MIN_EXTRACT_CHARS, type Fact } from "../llm/extractFacts";
+import { addFixPreviews, FIX_CHECKS } from "../llm/suggestFix";
 import type { ScanBatchEvent } from "../scan/orchestrate";
 import { projectKeysOf, refreshJiraNames } from "../scan/renameRescan";
 
 export interface ScanDeps {
-  /** Haiku classifier for check 5 and fact extraction + Sonnet adjudication for check 6. Without it, only labels / titles decide the page type and check 6 is off. */
+  /** Haiku classifier for check 5, fact extraction + Sonnet adjudication for check 6, Sonnet fix drafts (check 8). Without it, only labels / titles decide the page type, check 6 is off and suggestions stay generic. */
   llm?: LlmClient;
   /** Admin thresholds for check 5; defaults from code when absent. */
   staleThresholds?: StaleThresholds;
@@ -45,9 +46,12 @@ export async function scanBatch(event: ScanBatchEvent, repo: Repo, clients: Clie
           adjudicate: (conflict) => adjudicateConflict(llm, conflict),
           jira: (key) => clients.jira.getIssue(key),
         });
-        addUsage(tokens, "smart", c.usage); // adjudication is the only Sonnet call
+        addUsage(tokens, "smart", c.usage);
         findings.push(...c.findings);
       }
+
+      const withFixes = await resolveFixPreviews(page, prev, findings, repo, deps.llm, tokens);
+      findings.splice(0, findings.length, ...withFixes);
 
       const stored: ScannedPage = {
         pageId: page.id,
@@ -122,6 +126,30 @@ async function resolvePageType(
     console.warn(`classify ${page.id} failed`, err);
     return undefined;
   }
+}
+
+/**
+ * Check 8 (T19b): concrete fix text for the findings of checks 3, 4 and 6 on this page — Sonnet,
+ * at most `MAX_FIXES_PER_PAGE` calls. A rescan of the same version reuses the stored suggestions
+ * (no call, and a dismissed finding keeps its identity); a changed page is drafted afresh. Without
+ * an LLM, or when drafting fails, the generic suggestions stay.
+ */
+async function resolveFixPreviews(
+  page: { id: string; title: string; text: string; version: number },
+  prev: ScannedPage | undefined,
+  findings: Finding[],
+  repo: Repo,
+  llm: LlmClient | undefined,
+  tokens: LlmUsage,
+): Promise<Finding[]> {
+  if (!llm || !findings.some((f) => f.pageId === page.id && FIX_CHECKS.has(f.check))) return findings;
+  let stored: Finding[] = [];
+  if (prev?.version === page.version) {
+    stored = [...(await repo.findingsOfPage(page.id, "open")), ...(await repo.findingsOfPage(page.id, "dismissed"))];
+  }
+  const r = await addFixPreviews({ llm, page, findings, stored, log: (line) => console.warn(line) });
+  addUsage(tokens, "smart", r.usage);
+  return r.findings;
 }
 
 /**
