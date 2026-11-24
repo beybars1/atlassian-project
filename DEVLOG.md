@@ -4,6 +4,12 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-25 (Wed, night) — BLOCKED, no task taken
+
+- No unblocked agent task: main green (182 tests, typecheck, manifest OK), no open PRs. Everything left waits on the owner — **T06** (dev-site verification; gates T07 / T09 / T10a / T13 / T15a / T16b / T17a / T17b / T19c / T19e) and a logged-in Forge CLI for **T22** (`forge eligibility` / `forge lint` fail here with a keytar error and with placeholder credentials — `UserNotFoundError`); **T12a** scope decision, **T20** listing prerequisites. T24–T26 are "not before week 5". Hours: ~0.25.
+
+---
+
 ## 2026-11-24 (Tue, night) — T19b suggested-fix preview
 
 **Done**
