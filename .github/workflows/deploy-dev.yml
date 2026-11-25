@@ -29,3 +29,9 @@ jobs:
         if: steps.reg.outputs.skip != 'true'
       - run: npx forge deploy -e development --non-interactive
         if: steps.reg.outputs.skip != 'true'
+      # T22: the "Runs on Atlassian" report, in the log of every deploy. Informational — the static
+      # no-egress guard in `npm run validate:manifest` (ci.yml) is what blocks a regression.
+      - name: Runs on Atlassian eligibility
+        run: npx forge eligibility -e development --non-interactive
+        if: steps.reg.outputs.skip != 'true'
+        continue-on-error: true

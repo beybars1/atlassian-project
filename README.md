@@ -13,6 +13,7 @@ Nightly verification of Confluence pages against Jira and the rest of the wiki. 
 npm ci
 npm run typecheck
 npm test          # pure checks, no Forge runtime needed
+npm run validate:manifest   # manifest schema + "Runs on Atlassian" no-egress guard
 npx forge lint    # after `forge register`
 npx forge deploy -e development
 ```
