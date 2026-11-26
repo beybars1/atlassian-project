@@ -4,6 +4,32 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-27 (Fri, night) — T22a Runs on Atlassian verdict + data residency
+
+**Done**
+- Read the `deploy-dev` log of the first merge after T22 (run `45728632242`, job `139604756312`, commit `4f43c72`, 2026-11-26 00:25 UTC; `gh api repos/<owner>/<repo>/actions/runs/<id>/jobs` → `…/actions/jobs/<job_id>/logs`). Verbatim:
+  - `forge lint`: `No issues found.` — both as its own step and again inside `forge deploy`.
+  - `forge deploy -e development`: `✔ Deployed` … `ℹ The version of your app [2.16.0] that was just deployed to [development] is eligible for the Runs on Atlassian program.`
+  - `forge eligibility -e development --non-interactive`: `✔ Checking eligibility...` → `ℹ The version of your app [2.16.0] that's deployed to [development] is eligible for the Runs on Atlassian program.`
+  - **Verdict: eligible.** Nothing to fix. The deployed development version is 2.16.0 (Forge bumps the major on each module/scope change — T19 byline, T12 — and the minor on every deploy).
+- Data residency: the eligibility report says nothing about it, so confirmed against the Forge docs instead. Every persistent Forge-hosted storage capability — KVS, Custom Entity Store, **Forge SQL**, Object Store — is data-residency-enabled; an app that keeps its in-scope end-user data only in hosted storage "qualifies for PINNED status without additional configuration" and Forge "will take care of the hosting, pinning, and migration of hosted data". There is no manifest field for it. WikiVerify stores everything in Forge SQL (`sql` module, `storage:app`) and has no remotes, so the realm follows the host site by construction. What stays manual: the Marketplace **Privacy & Security tab** answer "App supports data residency: Yes" and the in-scope / out-of-scope data description are partner-entered (and partner-attested) — that is the owner's T20, now noted there. Our in-scope data: page text excerpts (quotes) and extracted facts in `findings` / `facts`, page metadata in `pages`, Jira component/version names in `jira_names`; nothing leaves the site, including LLM calls (Forge LLMs).
+- `notes/listing.md`: the badge is confirmed, so the "name it only after T22" reservation is lifted; the copy may say "Runs on Atlassian" outright. README: one line stating the verdict and where the report lives.
+- `TASKS.md`: T22a ticked; T22 marked complete (its "report + residency" half was this task); new **T22b** — the deploy log warns that Forge CLI 15.1.0 is out of date (16.0.0 available) and that `actions/checkout@v4` / `setup-node@v4` target Node 20, which the runners now force onto Node 24. Harmless today, both are cheap to bump, and `forge eligibility` / `lint` output can change between CLI majors — worth doing deliberately in its own PR, not here.
+- No code change; 190 tests, typecheck and `validate:manifest` green on main at the start of the session.
+
+**Learned**
+- The GitHub REST route for a job log (`/actions/jobs/<id>/logs`) returns the plain text with a per-line timestamp prefix; strip `^[^Z]*Z ` and grep for `eligib`. The `forge eligibility` verdict is a single `ℹ` line; "not eligible" output would list the offending permissions/remotes in the same place — that is what a future fix would act on.
+- `forge deploy` already prints the eligibility line on its own since CLI 15, so the separate `forge eligibility` step is a second opinion rather than the only source. Keeping it: it is the one that can be run without deploying (`-e development` against the deployed version) if we ever need to re-check.
+- Runs on Atlassian needs two things, not one: no egress of in-scope data **and** data residency matching the host. The static guard covers the first; the second is a consequence of hosted-storage-only, which the same guard also enforces (no `remotes`, no `external`), so one check keeps both.
+
+**Next**
+- Agent: nothing unblocked beyond **T22b** (CLI / actions bump, needs nothing — next session). The rest waits for T06 / T07 on the dev site; T24–T26 are "not before week 5".
+- Owner: T06 verification on the dev site; T12a scope decision; T20 — the Privacy & Security tab now has a concrete answer for data residency (see above).
+
+**Hours:** ~0.75
+
+---
+
 ## 2026-11-26 (Thu, night) — T22 Runs on Atlassian pre-flight (static half)
 
 **Done**
