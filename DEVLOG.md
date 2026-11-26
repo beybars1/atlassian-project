@@ -4,6 +4,27 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-26 (Thu, night) — T22 Runs on Atlassian pre-flight (static half)
+
+**Done**
+- `scripts/eligibility.mjs` — `runsOnAtlassianIssues(manifest, sources)`, pure: lists every way the app could stop qualifying for the badge. Manifest: any `permissions.external.*` key (fetch, images, fonts … — the rule enforced is "no egress", not "no fetch"), top-level `remotes` / `providers` / `connectModules` / `services`, `app.connect`, and any module entry with `endpoint` (remote backend) or `providers` (external auth). Sources: `api.fetch(`, `import { fetch } from "@forge/api"`, `XMLHttpRequest`, `new WebSocket(`. Atlassian requests (`asApp().requestConfluence/Jira`) and local names like `fetchPage` pass.
+- `npm run validate:manifest` runs it over `manifest.yml` and every file under `src/` after the schema check, and now **exits 1** on either failure — before, the script only printed `MANIFEST ERRORS` and exited 0, so it never actually guarded anything. `ci.yml` runs `validate:manifest` as a third step (it was local-only).
+- `deploy-dev.yml`: `npx forge eligibility -e development --non-interactive` after each deploy, `continue-on-error` — the real report in the Actions log of every merge, without the deploy depending on it.
+- 8 new tests (`test/eligibility.test.ts`): each manifest rule, each source pattern, garbage input, and one test that runs the real `manifest.yml` + `src/` through the checker, so the repo guards itself in `npm test` too. 190 total green; typecheck + manifest validation green.
+- README: the `validate:manifest` line.
+
+**Learned**
+- `forge eligibility` exists in CLI 15.1 (`-e`, `--non-interactive`, `--major-version`) and needs a logged-in CLI like `lint`; the deploy workflow already has the credentials and has been green on every merge since 11-12, so the report costs nothing there. Reading it back is a `gh api …/actions/runs/<id>/jobs` + job-log call — an agent task, hence T22a is not `[owner]`.
+- The old `validate-manifest.mjs` swallowed its own verdict (no non-zero exit). Worth remembering for any script that is supposed to gate something: check the exit code, not the output.
+
+**Next**
+- Agent: T22a once this PR is merged and the next deploy-dev run has the report. Otherwise still gated on T06 / T07 (dev site) and T24–T26 (not before week 5).
+- Owner: T06 verification on the dev site; T12a scope decision; T20 listing prerequisites.
+
+**Hours:** ~1
+
+---
+
 ## 2026-11-25 (Wed, night) — BLOCKED, no task taken
 
 - No unblocked agent task: main green (182 tests, typecheck, manifest OK), no open PRs. Everything left waits on the owner — **T06** (dev-site verification; gates T07 / T09 / T10a / T13 / T15a / T16b / T17a / T17b / T19c / T19e) and a logged-in Forge CLI for **T22** (`forge eligibility` / `forge lint` fail here with a keytar error and with placeholder credentials — `UserNotFoundError`); **T12a** scope decision, **T20** listing prerequisites. T24–T26 are "not before week 5". Hours: ~0.25.
