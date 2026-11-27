@@ -74,7 +74,7 @@ Order on the listing: S1 as highlight 1, S2 as highlight 3, S3 as highlight 2; S
 ## Not in this draft (other tasks)
 
 - Privacy & security questionnaire, support URL, EULA, documentation URL — T20 (owner). The Documentation URL is optional for a free app; a README-level page is enough for v0.
-- "Runs on Atlassian" badge: the copy says "nothing leaves your site", which is true of the manifest today; the badge itself is confirmed by `forge eligibility` in T22 and should be named in the listing only after that.
+- "Runs on Atlassian" badge: confirmed 2026-11-27 — `forge eligibility` reports the deployed development version eligible (T22a, DEVLOG). The copy may name "Runs on Atlassian" outright; "nothing leaves your site" stands.
 - Suggested-fix text: the copy says every finding "names the fix", which is the `suggestion` line each check already emits. Rewrite to "shows the exact replacement text" only once T19b ships.
 - Broken attachment links: the check exists but stays silent until the owner adds the `read:attachment:confluence` scope (T12a), so the copy says "pages and anchors" only.
 - Video: optional; skip for v0.
