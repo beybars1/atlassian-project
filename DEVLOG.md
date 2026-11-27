@@ -4,6 +4,28 @@ Newest first. One entry per working session. Format: what was done · what was l
 
 ---
 
+## 2026-11-28 (Sat, night) — T22b deploy toolchain bump (Forge CLI 16, actions v5)
+
+**Done**
+- `@forge/cli` `^15.1.0` → `^16.0.0` (16.0.0 is `latest`; engines `^22.23.4 || ^24.22.1`, satisfied by `node-version: 22` on the runners and by the `nodejs22.x` Forge runtime — nothing else changes). `package-lock.json` shrinks by ~1,600 lines: keytar and its native build chain are gone.
+- `actions/checkout@v4` → `@v5`, `actions/setup-node@v4` → `@v5` in `ci.yml`, `deploy-dev.yml`, `forge-bootstrap.yml` — same inputs (`node-version: 22`, `cache: npm`), v5 runs on Node 24 natively instead of being forced onto it.
+- Checked every Forge command the three workflows call against the 16.0 `--help`: `lint`, `deploy -e … --non-interactive`, `eligibility -e … --non-interactive` (`-v/--major-version` still there), `install --site/--product/--upgrade/--confirm-scopes`, `register --accept-terms --developer-space-id`, `developer-spaces list --json`, `settings set usage-analytics`, `whoami --verbose`. All present, no renamed flags. The 16.0 breaking changes touch only things we never used: `forge login -t`, `providers configure -s`, `variables set --encrypt <value>`, `forge create --no-install`, self-managed tunnels.
+- Local gate green after `npm ci`: typecheck, 190 tests, `validate:manifest` (MANIFEST OK, RUNS ON ATLASSIAN OK). `npm audit` goes 49 → 46 advisories, none new. `forge lint` still cannot run here (no credentials), but see Learned.
+- `TASKS.md`: T22b ticked; **T22c** (read the live verdicts from the first deploy-dev log on CLI 16 — the half of T22b that needs a merge) and **T22d** (vitest 2.1 carries the critical `npm audit` entries; dev-only, separate PR) added right below.
+
+**Learned**
+- CLI 16 replaces keytar with a permission-protected credential file. Two consequences: the `UserNotFoundError` / keytar noise from 11-25 is gone — an unauthenticated `forge lint` now says plainly `Not logged in. Run forge login, or set the FORGE_EMAIL and FORGE_API_TOKEN environment variables` — and anyone with credentials in the OS keychain must `forge login` once after upgrading. CI is unaffected: the env variables keep precedence.
+- `non-interactive` now defaults to `auto` and turns itself on when a known agent (Claude Code, Rovo Dev) or CI runs the CLI. Our explicit `--non-interactive` flags stay — a workflow should not depend on agent detection — but a missing input in CI now fails with a `MISSING_INPUT` error that names the flag and the exact `Next:` command, which is what to grep for if a future deploy-dev run goes red.
+- The former npm `postinstall` work of the CLI now runs on the first invocation of a version, so the first `npx forge …` step in a fresh runner is a little slower; harmless, and it means the CLI works under package managers that skip lifecycle scripts.
+
+**Next**
+- Agent: T22c once this PR is merged and deploy-dev has run on CLI 16; T22d (vitest bump) needs nothing. The rest waits for T06 / T07 on the dev site; T24–T26 are "not before week 5".
+- Owner: T06 verification on the dev site; T12a scope decision; T20 listing prerequisites (data-residency answer in the 11-27 entry).
+
+**Hours:** ~0.75
+
+---
+
 ## 2026-11-27 (Fri, night) — T22a Runs on Atlassian verdict + data residency
 
 **Done**
